@@ -9,7 +9,7 @@ import org.robolectric.RobolectricTestRunner
 import org.robolectric.annotation.Config
 
 @RunWith(RobolectricTestRunner::class)
-@Config(sdk = [36])
+@Config(sdk = [35]) // Robolectric 4.16.1 does not support SDK 36 in CI; keep tests on a supported SDK.
 class ExampleRobolectricTest {
 
   @Test
