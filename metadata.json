@@ -1,0 +1,6 @@
+{
+  "name": "KGN Construction",
+  "description": "Owner-only attendance, labour management, multiple construction sites, and wage payroll app for KGN Construction.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
