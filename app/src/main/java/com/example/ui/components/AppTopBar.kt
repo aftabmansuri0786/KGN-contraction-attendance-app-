@@ -13,12 +13,14 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.CloudSync
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Translate
 import androidx.compose.material3.Badge
 import androidx.compose.material3.BadgedBox
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
@@ -45,6 +47,8 @@ import com.example.util.AppStrings
 fun AppTopBar(
     language: AppLanguage,
     isDarkTheme: Boolean,
+    isSyncing: Boolean = false,
+    onSyncClick: () -> Unit = {},
     onToggleLanguage: () -> Unit,
     onToggleTheme: () -> Unit,
     onLockApp: () -> Unit,
@@ -126,6 +130,27 @@ fun AppTopBar(
                 }
 
                 Spacer(modifier = Modifier.width(4.dp))
+
+                // Cloud Sync Button
+                IconButton(
+                    onClick = onSyncClick,
+                    modifier = Modifier.size(36.dp).testTag("sync_btn")
+                ) {
+                    if (isSyncing) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(18.dp),
+                            strokeWidth = 2.dp,
+                            color = ConstructionOrange
+                        )
+                    } else {
+                        Icon(
+                            imageVector = Icons.Default.CloudSync,
+                            contentDescription = "Sync Cloud",
+                            tint = ConstructionOrange,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                }
 
                 // Theme Toggle
                 IconButton(

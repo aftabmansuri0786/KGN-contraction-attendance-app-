@@ -1,0 +1,114 @@
+{
+  "entities": {
+    "Worker": {
+      "title": "Worker",
+      "description": "Construction worker profile managed by contractor",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "mobile": { "type": "string" },
+        "category": { "type": "string" },
+        "dailyWage": { "type": "number" },
+        "overtimeHourlyRate": { "type": "number" },
+        "joiningDate": { "type": "string" },
+        "siteId": { "type": "string" },
+        "isActive": { "type": "boolean" },
+        "notes": { "type": "string" },
+        "updatedAt": { "type": "number" }
+      },
+      "required": ["id", "name"]
+    },
+    "Site": {
+      "title": "Site",
+      "description": "Construction site project",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "address": { "type": "string" },
+        "startDate": { "type": "string" },
+        "expectedEndDate": { "type": "string" },
+        "status": { "type": "string" },
+        "notes": { "type": "string" },
+        "updatedAt": { "type": "number" }
+      },
+      "required": ["id", "name"]
+    },
+    "Attendance": {
+      "title": "Attendance",
+      "description": "Daily attendance record for a worker at a site",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "workerId": { "type": "string" },
+        "siteId": { "type": "string" },
+        "date": { "type": "string" },
+        "status": { "type": "string" },
+        "paidDayFraction": { "type": "number" },
+        "dailyWageSnapshot": { "type": "number" },
+        "overtimeHours": { "type": "number" },
+        "overtimeRateSnapshot": { "type": "number" },
+        "calculatedEarnings": { "type": "number" },
+        "remarks": { "type": "string" },
+        "updatedAt": { "type": "number" }
+      },
+      "required": ["id", "workerId", "date", "status"]
+    },
+    "Advance": {
+      "title": "Advance",
+      "description": "Cash or online advance given to worker",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "workerId": { "type": "string" },
+        "amount": { "type": "number" },
+        "date": { "type": "string" },
+        "paymentMethod": { "type": "string" },
+        "reference": { "type": "string" },
+        "notes": { "type": "string" },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["id", "workerId", "amount", "date"]
+    },
+    "Payment": {
+      "title": "Payment",
+      "description": "Wage settlement payment made to worker",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "workerId": { "type": "string" },
+        "amount": { "type": "number" },
+        "date": { "type": "string" },
+        "paymentMethod": { "type": "string" },
+        "reference": { "type": "string" },
+        "notes": { "type": "string" },
+        "voucherNumber": { "type": "string" },
+        "createdAt": { "type": "number" }
+      },
+      "required": ["id", "workerId", "amount", "date"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}/workers/{workerId}": {
+      "schema": "Worker",
+      "description": "Private workers collection for owner"
+    },
+    "/users/{userId}/sites/{siteId}": {
+      "schema": "Site",
+      "description": "Private sites collection for owner"
+    },
+    "/users/{userId}/attendance/{attendanceId}": {
+      "schema": "Attendance",
+      "description": "Private attendance records for owner"
+    },
+    "/users/{userId}/advances/{advanceId}": {
+      "schema": "Advance",
+      "description": "Private advances records for owner"
+    },
+    "/users/{userId}/payments/{paymentId}": {
+      "schema": "Payment",
+      "description": "Private wage payments records for owner"
+    }
+  }
+}

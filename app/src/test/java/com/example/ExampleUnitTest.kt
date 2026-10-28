@@ -1,7 +1,9 @@
 package com.example
 
 import com.example.data.model.AttendanceStatus
+import com.example.util.WorkerMessageHelper
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Test
 
 class PayrollCalculationUnitTest {
@@ -36,5 +38,30 @@ class PayrollCalculationUnitTest {
         // If advances are deducted from settlement
         val finalSettlementDue = netUnpaidWages - totalAdvances
         assertEquals(4000.0, finalSettlementDue, 0.001)
+    }
+
+    @Test
+    fun testDefaultCountryCodeAndPhoneFormatting() {
+        // 10 digits entered without country code
+        val formatted = WorkerMessageHelper.formatWithCountryCode("9876543210")
+        assertEquals("+91 9876543210", formatted)
+
+        // Digits extracted
+        val local10 = WorkerMessageHelper.extractLocal10Digits("+91 9876543210")
+        assertEquals("9876543210", local10)
+
+        // Phone masked with +91
+        val masked = WorkerMessageHelper.maskPhoneNumber("+91 9876543210")
+        assertEquals("+91 98765*****", masked)
+
+        // WhatsApp clean
+        val waClean = WorkerMessageHelper.cleanForWhatsApp("+91 9876543210")
+        assertEquals("919876543210", waClean)
+
+        // SMS clean
+        val smsClean = WorkerMessageHelper.cleanForSms("+91 9876543210")
+        assertEquals("9876543210", smsClean)
+
+        assertTrue(WorkerMessageHelper.isValidPhoneNumber(formatted))
     }
 }

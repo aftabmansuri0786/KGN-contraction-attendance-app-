@@ -30,6 +30,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -74,11 +75,23 @@ class MainActivity : ComponentActivity() {
             val isDarkTheme by viewModel.isDarkTheme.collectAsStateWithLifecycle()
             val language by viewModel.language.collectAsStateWithLifecycle()
             val isUnlocked by viewModel.isOwnerUnlocked.collectAsStateWithLifecycle()
+            val currentUser by viewModel.currentUser.collectAsStateWithLifecycle()
+            val isSyncing by viewModel.isSyncing.collectAsStateWithLifecycle()
+            val ownerPin by viewModel.ownerPin.collectAsStateWithLifecycle()
 
             KgnConstructionTheme(darkTheme = isDarkTheme) {
                 if (!isUnlocked) {
                     AuthScreen(
                         language = language,
+                        currentUser = currentUser,
+                        isSyncing = isSyncing,
+                        onSignInWithGoogle = {
+                            viewModel.signInWithGoogle(this@MainActivity) { success, _ ->
+                                if (success) {
+                                    viewModel.unlockOwner(ownerPin)
+                                }
+                            }
+                        },
                         onUnlock = { pin -> viewModel.unlockOwner(pin) }
                     )
                 } else {
@@ -124,6 +137,10 @@ fun MainScreenContent(
     val selectedDate by viewModel.selectedDate.collectAsStateWithLifecycle()
     val selectedSiteId by viewModel.selectedSiteId.collectAsStateWithLifecycle()
     val ownerPin by viewModel.ownerPin.collectAsStateWithLifecycle()
+    val currentUser by viewModel.currentUser.collectAsStateWithLifecycle()
+    val isSyncing by viewModel.isSyncing.collectAsStateWithLifecycle()
+    val lastSyncTimestamp by viewModel.lastSyncTimestamp.collectAsStateWithLifecycle()
+    val context = LocalContext.current
 
     // Back handler to return to Home dashboard
     BackHandler(enabled = currentTab != 0) {
@@ -135,6 +152,8 @@ fun MainScreenContent(
             AppTopBar(
                 language = language,
                 isDarkTheme = isDarkTheme,
+                isSyncing = isSyncing,
+                onSyncClick = { viewModel.syncCloudData() },
                 onToggleLanguage = { viewModel.toggleLanguage() },
                 onToggleTheme = { viewModel.toggleTheme() },
                 onLockApp = { viewModel.lockOwner() }
@@ -349,6 +368,14 @@ fun MainScreenContent(
                     language = language,
                     isDarkTheme = isDarkTheme,
                     currentPin = ownerPin,
+                    currentUser = currentUser,
+                    isSyncing = isSyncing,
+                    lastSyncTimestamp = lastSyncTimestamp,
+                    onSignInWithGoogle = {
+                        viewModel.signInWithGoogle(context) { _, _ -> }
+                    },
+                    onSignOutGoogle = { viewModel.signOutGoogle() },
+                    onSyncNow = { viewModel.syncCloudData() },
                     onToggleLanguage = { viewModel.toggleLanguage() },
                     onToggleTheme = { viewModel.toggleTheme() },
                     onChangePin = { viewModel.changeOwnerPin(it) },

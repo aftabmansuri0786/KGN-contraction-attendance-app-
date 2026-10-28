@@ -10,9 +10,16 @@ import com.example.data.model.AttendanceStatus
 import com.example.data.model.PaymentEntity
 import com.example.data.model.SiteEntity
 import com.example.data.model.WorkerEntity
+import android.content.Context
+import com.example.R
+import com.example.data.repository.FirestoreSyncRepository
 import com.example.data.repository.KgnRepository
 import com.example.util.AppLanguage
 import com.example.util.Formatters
+import com.example.util.GoogleAuthHelper
+import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.auth.FirebaseUser
+import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -37,6 +44,45 @@ data class DashboardMetrics(
 class KgnViewModel(application: Application) : AndroidViewModel(application) {
     private val db = AppDatabase.getDatabase(application)
     private val repository = KgnRepository(db)
+
+    private val firestore: FirebaseFirestore? = try {
+        val databaseId = application.getString(R.string.firestore_database_id)
+        FirebaseFirestore.getInstance(databaseId)
+    } catch (e: Exception) {
+        null
+    }
+
+    private val syncRepository = if (firestore != null) FirestoreSyncRepository(firestore, db) else null
+
+    // Google Auth & Cloud Sync
+    private val _currentUser = MutableStateFlow<FirebaseUser?>(GoogleAuthHelper.getCurrentUser())
+    val currentUser: StateFlow<FirebaseUser?> = _currentUser.asStateFlow()
+
+    private val _isSyncing = MutableStateFlow(false)
+    val isSyncing: StateFlow<Boolean> = _isSyncing.asStateFlow()
+
+    private val _lastSyncTimestamp = MutableStateFlow<Long?>(null)
+    val lastSyncTimestamp: StateFlow<Long?> = _lastSyncTimestamp.asStateFlow()
+
+    private val authListener = FirebaseAuth.AuthStateListener { auth ->
+        val user = auth.currentUser
+        _currentUser.value = user
+        if (user != null) {
+            syncCloudData()
+        }
+    }
+
+    init {
+        GoogleAuthHelper.getAuth().addAuthStateListener(authListener)
+        if (_currentUser.value != null) {
+            syncCloudData()
+        }
+    }
+
+    override fun onCleared() {
+        super.onCleared()
+        GoogleAuthHelper.getAuth().removeAuthStateListener(authListener)
+    }
 
     // Language & Theme State
     private val _language = MutableStateFlow(AppLanguage.HINDI)
@@ -194,6 +240,41 @@ class KgnViewModel(application: Application) : AndroidViewModel(application) {
         }
     }
 
+    fun syncCloudData() {
+        val user = _currentUser.value ?: return
+        val syncRepo = syncRepository ?: return
+        viewModelScope.launch {
+            _isSyncing.value = true
+            val result = syncRepo.syncAll(user.uid)
+            if (result.isSuccess) {
+                _lastSyncTimestamp.value = System.currentTimeMillis()
+            }
+            _isSyncing.value = false
+        }
+    }
+
+    fun signInWithGoogle(context: Context, onResult: (Boolean, String?) -> Unit) {
+        viewModelScope.launch {
+            _isSyncing.value = true
+            val result = GoogleAuthHelper.signInWithGoogle(context)
+            if (result.isSuccess) {
+                val user = result.getOrNull()
+                _currentUser.value = user
+                syncCloudData()
+                onResult(true, null)
+            } else {
+                _isSyncing.value = false
+                val errorMsg = result.exceptionOrNull()?.localizedMessage ?: "Sign in failed"
+                onResult(false, errorMsg)
+            }
+        }
+    }
+
+    fun signOutGoogle() {
+        GoogleAuthHelper.signOut()
+        _currentUser.value = null
+    }
+
     fun saveAttendance(
         workerId: String,
         siteId: String,
@@ -212,24 +293,58 @@ class KgnViewModel(application: Application) : AndroidViewModel(application) {
                 overtimeHours = overtimeHours,
                 remarks = remarks
             )
+            val uid = _currentUser.value?.uid
+            if (uid != null) {
+                val wageRate = allWorkers.value.find { it.id == workerId }?.dailyWage ?: 0.0
+                val otRate = allWorkers.value.find { it.id == workerId }?.overtimeHourlyRate ?: if (wageRate > 0) (wageRate / 8.0) else 0.0
+                val earnings = (status.fraction * wageRate) + (overtimeHours * otRate)
+                val att = AttendanceEntity(
+                    id = "att_${workerId}_${date}_$siteId",
+                    workerId = workerId,
+                    siteId = siteId,
+                    date = date,
+                    status = status.name,
+                    paidDayFraction = status.fraction,
+                    dailyWageSnapshot = wageRate,
+                    overtimeHours = overtimeHours,
+                    overtimeRateSnapshot = otRate,
+                    calculatedEarnings = earnings,
+                    remarks = remarks,
+                    updatedAt = System.currentTimeMillis()
+                )
+                syncRepository?.uploadAttendance(uid, att)
+            }
         }
     }
 
     fun saveWorker(worker: WorkerEntity) {
         viewModelScope.launch {
             repository.saveWorker(worker)
+            val uid = _currentUser.value?.uid
+            if (uid != null) {
+                syncRepository?.uploadWorker(uid, worker)
+            }
         }
     }
 
     fun toggleWorkerStatus(worker: WorkerEntity) {
         viewModelScope.launch {
-            repository.saveWorker(worker.copy(isActive = !worker.isActive))
+            val updated = worker.copy(isActive = !worker.isActive)
+            repository.saveWorker(updated)
+            val uid = _currentUser.value?.uid
+            if (uid != null) {
+                syncRepository?.uploadWorker(uid, updated)
+            }
         }
     }
 
     fun saveSite(site: SiteEntity) {
         viewModelScope.launch {
             repository.saveSite(site)
+            val uid = _currentUser.value?.uid
+            if (uid != null) {
+                syncRepository?.uploadSite(uid, site)
+            }
         }
     }
 
@@ -251,6 +366,10 @@ class KgnViewModel(application: Application) : AndroidViewModel(application) {
                 notes = notes
             )
             repository.saveAdvance(advance)
+            val uid = _currentUser.value?.uid
+            if (uid != null) {
+                syncRepository?.uploadAdvance(uid, advance)
+            }
         }
     }
 
@@ -274,6 +393,10 @@ class KgnViewModel(application: Application) : AndroidViewModel(application) {
                 settlementPeriod = period
             )
             repository.savePayment(payment)
+            val uid = _currentUser.value?.uid
+            if (uid != null) {
+                syncRepository?.uploadPayment(uid, payment)
+            }
         }
     }
 
@@ -286,12 +409,20 @@ class KgnViewModel(application: Application) : AndroidViewModel(application) {
     fun deleteAdvance(id: String) {
         viewModelScope.launch {
             repository.deleteAdvance(id)
+            val uid = _currentUser.value?.uid
+            if (uid != null) {
+                syncRepository?.deleteAdvance(uid, id)
+            }
         }
     }
 
     fun deletePayment(id: String) {
         viewModelScope.launch {
             repository.deletePayment(id)
+            val uid = _currentUser.value?.uid
+            if (uid != null) {
+                syncRepository?.deletePayment(uid, id)
+            }
         }
     }
 }

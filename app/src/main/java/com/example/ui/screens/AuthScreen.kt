@@ -16,15 +16,21 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AccountCircle
+import androidx.compose.material.icons.filled.CloudDone
 import androidx.compose.material.icons.filled.Engineering
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.LockOpen
+import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
@@ -47,12 +53,17 @@ import androidx.compose.ui.unit.sp
 import com.example.ui.theme.CharcoalDark
 import com.example.ui.theme.ConstructionOrange
 import com.example.ui.theme.StatusAbsent
+import com.example.ui.theme.StatusPresent
 import com.example.util.AppLanguage
 import com.example.util.AppStrings
+import com.google.firebase.auth.FirebaseUser
 
 @Composable
 fun AuthScreen(
     language: AppLanguage,
+    currentUser: FirebaseUser? = null,
+    isSyncing: Boolean = false,
+    onSignInWithGoogle: () -> Unit = {},
     onUnlock: (String) -> Boolean,
     modifier: Modifier = Modifier
 ) {
@@ -63,23 +74,25 @@ fun AuthScreen(
         modifier = modifier
             .fillMaxSize()
             .background(CharcoalDark)
-            .padding(24.dp),
+            .padding(20.dp),
         contentAlignment = Alignment.Center
     ) {
         Card(
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
             shape = RoundedCornerShape(20.dp),
-            modifier = Modifier.fillMaxWidth().testTag("auth_screen_card")
+            modifier = Modifier
+                .fillMaxWidth()
+                .testTag("auth_screen_card")
         ) {
             Column(
-                modifier = Modifier.padding(24.dp),
+                modifier = Modifier.padding(22.dp),
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(16.dp)
+                verticalArrangement = Arrangement.spacedBy(14.dp)
             ) {
                 // Helmet Logo
                 Box(
                     modifier = Modifier
-                        .size(72.dp)
+                        .size(64.dp)
                         .clip(CircleShape)
                         .background(ConstructionOrange),
                     contentAlignment = Alignment.Center
@@ -88,7 +101,7 @@ fun AuthScreen(
                         imageVector = Icons.Default.Engineering,
                         contentDescription = null,
                         tint = Color.White,
-                        modifier = Modifier.size(42.dp)
+                        modifier = Modifier.size(38.dp)
                     )
                 }
 
@@ -106,6 +119,98 @@ fun AuthScreen(
                     )
                 }
 
+                // Google Account Sync Section
+                if (currentUser != null) {
+                    Surface(
+                        color = StatusPresent.copy(alpha = 0.12f),
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(12.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.CloudDone,
+                                contentDescription = null,
+                                tint = StatusPresent,
+                                modifier = Modifier.size(24.dp)
+                            )
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Column {
+                                Text(
+                                    text = if (language == AppLanguage.HINDI) "Google सिंक सक्रिय (Cloud Sync)" else "Google Cloud Sync Active",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 13.sp,
+                                    color = StatusPresent
+                                )
+                                Text(
+                                    text = currentUser.email ?: "Signed in",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
+                        }
+                    }
+                } else {
+                    // Google Sign-In Call to Action Card
+                    Surface(
+                        color = MaterialTheme.colorScheme.surfaceVariant,
+                        shape = RoundedCornerShape(12.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Column(
+                            modifier = Modifier.padding(12.dp),
+                            verticalArrangement = Arrangement.spacedBy(8.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Text(
+                                text = if (language == AppLanguage.HINDI)
+                                    "पुराना डेटा वापस पाने व बैकअप हेतु Google लॉगिन:"
+                                else
+                                    "Sign in with Google to sync & restore previous data:",
+                                style = MaterialTheme.typography.labelMedium,
+                                textAlign = TextAlign.Center,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+
+                            OutlinedButton(
+                                onClick = onSignInWithGoogle,
+                                enabled = !isSyncing,
+                                shape = RoundedCornerShape(10.dp),
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .height(46.dp)
+                                    .testTag("google_signin_btn")
+                            ) {
+                                if (isSyncing) {
+                                    CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = if (language == AppLanguage.HINDI) "डेटा सिंक हो रहा है..." else "Syncing data...",
+                                        fontSize = 13.sp
+                                    )
+                                } else {
+                                    Icon(
+                                        imageVector = Icons.Default.AccountCircle,
+                                        contentDescription = "Google",
+                                        tint = ConstructionOrange,
+                                        modifier = Modifier.size(20.dp)
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text(
+                                        text = if (language == AppLanguage.HINDI) "Sign in with Google" else "Sign in with Google",
+                                        fontWeight = FontWeight.Bold,
+                                        fontSize = 14.sp
+                                    )
+                                }
+                            }
+                        }
+                    }
+                }
+
+                HorizontalDivider(modifier = Modifier.padding(vertical = 2.dp))
+
                 Text(
                     text = AppStrings.get("enter_pin", language),
                     style = MaterialTheme.typography.labelMedium,
@@ -121,7 +226,9 @@ fun AuthScreen(
                             errorMessage = ""
                         }
                     },
-                    modifier = Modifier.fillMaxWidth().testTag("owner_pin_input"),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .testTag("owner_pin_input"),
                     leadingIcon = { Icon(Icons.Default.Lock, contentDescription = null) },
                     placeholder = { Text("••••") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.NumberPassword),
@@ -148,7 +255,10 @@ fun AuthScreen(
                     },
                     colors = ButtonDefaults.buttonColors(containerColor = ConstructionOrange),
                     shape = RoundedCornerShape(12.dp),
-                    modifier = Modifier.fillMaxWidth().height(50.dp).testTag("unlock_btn")
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(50.dp)
+                        .testTag("unlock_btn")
                 ) {
                     Icon(Icons.Default.LockOpen, contentDescription = null, modifier = Modifier.size(18.dp))
                     Spacer(modifier = Modifier.width(8.dp))
@@ -169,7 +279,7 @@ fun AuthScreen(
                         text = AppStrings.get("default_pin_hint", language),
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.padding(10.dp),
+                        modifier = Modifier.padding(8.dp),
                         textAlign = TextAlign.Center
                     )
                 }

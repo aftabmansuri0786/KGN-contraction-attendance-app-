@@ -17,21 +17,27 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Campaign
+import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.CloudDone
+import androidx.compose.material.icons.filled.CloudSync
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.filled.Translate
 import com.example.util.AdMobConfig
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Divider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -54,12 +60,19 @@ import com.example.ui.theme.StatusPresent
 import com.example.util.AppLanguage
 import com.example.util.AppStrings
 import com.example.util.Formatters
+import com.google.firebase.auth.FirebaseUser
 
 @Composable
 fun SettingsScreen(
     language: AppLanguage,
     isDarkTheme: Boolean,
     currentPin: String,
+    currentUser: FirebaseUser? = null,
+    isSyncing: Boolean = false,
+    lastSyncTimestamp: Long? = null,
+    onSignInWithGoogle: () -> Unit = {},
+    onSignOutGoogle: () -> Unit = {},
+    onSyncNow: () -> Unit = {},
     onToggleLanguage: () -> Unit,
     onToggleTheme: () -> Unit,
     onChangePin: (String) -> Unit,
@@ -260,30 +273,126 @@ fun SettingsScreen(
             }
         }
 
-        // Firebase Cloud Sync & Architecture Info
+        // Google Account & Firebase Cloud Sync Card
         Card(
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
             shape = RoundedCornerShape(12.dp),
             modifier = Modifier.fillMaxWidth()
         ) {
             Column(
                 modifier = Modifier.padding(14.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Icon(Icons.Default.CloudDone, contentDescription = null, tint = StatusPresent)
+                    Icon(
+                        imageVector = if (currentUser != null) Icons.Default.CloudDone else Icons.Default.CloudSync,
+                        contentDescription = null,
+                        tint = if (currentUser != null) StatusPresent else ConstructionOrange
+                    )
                     Spacer(modifier = Modifier.width(8.dp))
                     Text(
-                        text = "Offline-First & Cloud Ready",
-                        fontWeight = FontWeight.Bold
+                        text = if (language == AppLanguage.HINDI) "गूगल अकाउंट व क्लाउड बैकअप (Cloud Sync)" else "Google Account & Cloud Backup",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 15.sp
                     )
                 }
 
-                Text(
-                    text = "All attendance records, workers, sites, advances, and payments are saved securely in local Room database and works 100% offline without internet. When connected to Firebase, records can sync to Cloud Firestore under owner ID.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+                if (currentUser != null) {
+                    Surface(
+                        color = StatusPresent.copy(alpha = 0.1f),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(10.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Icon(Icons.Default.AccountCircle, contentDescription = null, tint = StatusPresent, modifier = Modifier.size(32.dp))
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Column(modifier = Modifier.weight(1f)) {
+                                Text(
+                                    text = currentUser.displayName ?: "Authorized Owner",
+                                    fontWeight = FontWeight.Bold,
+                                    fontSize = 13.sp
+                                )
+                                Text(
+                                    text = currentUser.email ?: "",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                                Text(
+                                    text = if (lastSyncTimestamp != null)
+                                        "Last synced: Just now"
+                                    else
+                                        "Connected to Cloud Firestore",
+                                    fontSize = 11.sp,
+                                    color = StatusPresent
+                                )
+                            }
+                        }
+                    }
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        Button(
+                            onClick = onSyncNow,
+                            enabled = !isSyncing,
+                            colors = ButtonDefaults.buttonColors(containerColor = ConstructionOrange),
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            if (isSyncing) {
+                                CircularProgressIndicator(modifier = Modifier.size(16.dp), color = Color.White, strokeWidth = 2.dp)
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(if (language == AppLanguage.HINDI) "सिंक हो रहा..." else "Syncing...", fontSize = 12.sp)
+                            } else {
+                                Icon(Icons.Default.Sync, contentDescription = null, modifier = Modifier.size(16.dp))
+                                Spacer(modifier = Modifier.width(6.dp))
+                                Text(if (language == AppLanguage.HINDI) "अभी सिंक करें" else "Sync Now", fontSize = 12.sp)
+                            }
+                        }
+
+                        OutlinedButton(
+                            onClick = onSignOutGoogle,
+                            shape = RoundedCornerShape(8.dp),
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            Text(if (language == AppLanguage.HINDI) "लॉगआउट" else "Sign Out", fontSize = 12.sp)
+                        }
+                    }
+                } else {
+                    Text(
+                        text = if (language == AppLanguage.HINDI)
+                            "ऐप अपडेट करने पर या फोन बदलने पर अपना पूरा पुराना डेटा (मजदूर, हाजिरी, एडवांस, वेतन) सुरक्षित रखने के लिए अपने Google Account से लॉगिन करें।"
+                        else
+                            "Sign in with your Google Account to automatically sync and restore all workers, attendance, advances, and payments across updates.",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+
+                    Button(
+                        onClick = onSignInWithGoogle,
+                        enabled = !isSyncing,
+                        colors = ButtonDefaults.buttonColors(containerColor = ConstructionOrange),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.fillMaxWidth().height(46.dp)
+                    ) {
+                        if (isSyncing) {
+                            CircularProgressIndicator(modifier = Modifier.size(18.dp), color = Color.White, strokeWidth = 2.dp)
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(if (language == AppLanguage.HINDI) "डेटा लोड हो रहा है..." else "Signing in & Syncing...")
+                        } else {
+                            Icon(Icons.Default.AccountCircle, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(8.dp))
+                            Text(
+                                text = if (language == AppLanguage.HINDI) "Google Account से लॉगिन करें" else "Sign in with Google",
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+                }
             }
         }
 

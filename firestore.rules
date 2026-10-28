@@ -1,38 +1,18 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    // Helper function: only authenticated owner can access
-    function isOwner() {
-      return request.auth != null;
+    // Default deny
+    match /{document=**} {
+      allow read, write: if false;
     }
 
-    // Business collections restricted to owner
+    // Owner-only private data hierarchy
     match /users/{userId} {
       allow read, write: if request.auth != null && request.auth.uid == userId;
-    }
 
-    match /workers/{workerId} {
-      allow read, write: if isOwner();
-    }
-
-    match /sites/{siteId} {
-      allow read, write: if isOwner();
-    }
-
-    match /attendance/{attId} {
-      allow read, write: if isOwner();
-    }
-
-    match /advances/{advId} {
-      allow read, write: if isOwner();
-    }
-
-    match /payments/{payId} {
-      allow read, write: if isOwner();
-    }
-
-    match /settings/{docId} {
-      allow read, write: if isOwner();
+      match /{allSubcollections=**} {
+        allow read, write: if request.auth != null && request.auth.uid == userId;
+      }
     }
   }
 }

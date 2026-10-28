@@ -28,14 +28,28 @@ data class WorkerMessageData(
 
 object WorkerMessageHelper {
 
+    const val DEFAULT_COUNTRY_CODE = "+91"
+
+    fun formatWithCountryCode(raw: String): String {
+        val digits = raw.filter { it.isDigit() }
+        if (digits.isBlank()) return ""
+        val last10 = if (digits.length >= 10) digits.takeLast(10) else digits
+        return "+91 $last10"
+    }
+
+    fun extractLocal10Digits(raw: String): String {
+        val digits = raw.filter { it.isDigit() }
+        return if (digits.length >= 10) digits.takeLast(10) else digits
+    }
+
     fun maskPhoneNumber(mobile: String): String {
         val digits = mobile.filter { it.isDigit() }
         return when {
             digits.length >= 10 -> {
                 val last10 = digits.takeLast(10)
-                "${last10.substring(0, 5)}*****"
+                "+91 ${last10.substring(0, 5)}*****"
             }
-            digits.isNotBlank() -> "${digits.take(3)}***"
+            digits.isNotBlank() -> "+91 ${digits.take(3)}***"
             else -> "Not Provided"
         }
     }

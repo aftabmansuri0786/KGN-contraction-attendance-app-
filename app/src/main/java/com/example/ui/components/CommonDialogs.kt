@@ -85,7 +85,11 @@ fun AddWorkerDialog(
     onSave: (WorkerEntity) -> Unit
 ) {
     var name by remember { mutableStateOf(workerToEdit?.name ?: "") }
-    var mobile by remember { mutableStateOf(workerToEdit?.mobile ?: "") }
+    var mobileDigits by remember {
+        mutableStateOf(
+            if (workerToEdit != null) WorkerMessageHelper.extractLocal10Digits(workerToEdit.mobile) else ""
+        )
+    }
     var category by remember { mutableStateOf(workerToEdit?.category ?: "Mason") }
     var dailyWageText by remember { mutableStateOf(workerToEdit?.dailyWage?.takeIf { it > 0 }?.toInt()?.toString() ?: "") }
     var otRateText by remember { mutableStateOf(workerToEdit?.overtimeHourlyRate?.takeIf { it > 0 }?.toInt()?.toString() ?: "") }
@@ -124,11 +128,31 @@ fun AddWorkerDialog(
                 )
 
                 OutlinedTextField(
-                    value = mobile,
-                    onValueChange = { mobile = it },
+                    value = mobileDigits,
+                    onValueChange = { input ->
+                        val digits = input.filter { it.isDigit() }
+                        if (digits.length <= 10) {
+                            mobileDigits = digits
+                        }
+                    },
                     label = { Text(AppStrings.get("mobile_no", language)) },
                     modifier = Modifier.fillMaxWidth().testTag("worker_mobile_input"),
-                    leadingIcon = { Icon(Icons.Default.Phone, contentDescription = null) },
+                    leadingIcon = {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.padding(start = 12.dp, end = 4.dp)
+                        ) {
+                            Icon(Icons.Default.Phone, contentDescription = null, modifier = Modifier.size(18.dp))
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = "+91",
+                                fontWeight = FontWeight.Bold,
+                                color = ConstructionOrange,
+                                fontSize = 14.sp
+                            )
+                        }
+                    },
+                    placeholder = { Text("98765 43210") },
                     keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Phone),
                     singleLine = true
                 )
@@ -241,10 +265,11 @@ fun AddWorkerDialog(
                         val wage = dailyWageText.toDoubleOrNull() ?: 0.0
                         val otRate = otRateText.toDoubleOrNull() ?: if (wage > 0) (wage / 8.0) else 0.0
                         val id = workerToEdit?.id ?: "KGN-W${System.currentTimeMillis().toString().takeLast(4)}"
+                        val formattedMobile = if (mobileDigits.isNotBlank()) WorkerMessageHelper.formatWithCountryCode(mobileDigits) else ""
                         val worker = WorkerEntity(
                             id = id,
                             name = name.trim(),
-                            mobile = mobile.trim(),
+                            mobile = formattedMobile,
                             category = category,
                             dailyWage = wage,
                             overtimeHourlyRate = otRate,
