@@ -25,11 +25,25 @@ jobs:
     - name: Grant execute permission for gradlew (if present)
       run: chmod +x gradlew || true
 
+    - name: Generate debug keystore for Android signing
+      run: |
+        if [ ! -f "$GITHUB_WORKSPACE/debug.keystore" ]; then
+          keytool -genkeypair -v \
+            -keystore "$GITHUB_WORKSPACE/debug.keystore" \
+            -storepass android \
+            -alias androiddebugkey \
+            -keypass android \
+            -keyalg RSA \
+            -keysize 2048 \
+            -validity 10000 \
+            -dname "CN=Android Debug,O=Android,C=US"
+        fi
+
     - name: Run Unit Tests
-      run: gradle :app:testDebugUnitTest
+      run: ./gradlew :app:testDebugUnitTest
 
     - name: Build Debug APK
-      run: gradle :app:assembleDebug
+      run: ./gradlew :app:assembleDebug
 
     - name: Upload Debug APK Artifact
       uses: actions/upload-artifact@v4
