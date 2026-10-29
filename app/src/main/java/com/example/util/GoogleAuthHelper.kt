@@ -6,7 +6,6 @@ import androidx.credentials.CredentialManager
 import androidx.credentials.CustomCredential
 import androidx.credentials.GetCredentialRequest
 import androidx.credentials.exceptions.GetCredentialCancellationException
-import com.example.R
 import com.google.android.libraries.identity.googleid.GetSignInWithGoogleOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import com.google.firebase.Firebase
@@ -18,6 +17,7 @@ import kotlinx.coroutines.tasks.await
 
 object GoogleAuthHelper {
     private const val TAG = "GoogleAuthHelper"
+    private const val FALLBACK_WEB_CLIENT_ID = "715807070390-be57nktutsnl4j0bckbpn1p48qti8jtc.apps.googleusercontent.com"
 
     fun getAuth(): FirebaseAuth = Firebase.auth
 
@@ -25,10 +25,15 @@ object GoogleAuthHelper {
 
     suspend fun signInWithGoogle(context: Context): Result<FirebaseUser> {
         return try {
-            val webClientId = try {
-                context.getString(R.string.default_web_client_id)
-            } catch (e: Exception) {
-                "715807070390-be57nktutsnl4j0bckbpn1p48qti8jtc.apps.googleusercontent.com"
+            val resId = context.resources.getIdentifier("default_web_client_id", "string", context.packageName)
+            val webClientId = if (resId != 0) {
+                try {
+                    context.getString(resId)
+                } catch (e: Exception) {
+                    FALLBACK_WEB_CLIENT_ID
+                }
+            } else {
+                FALLBACK_WEB_CLIENT_ID
             }
 
             val credentialManager = CredentialManager.create(context)

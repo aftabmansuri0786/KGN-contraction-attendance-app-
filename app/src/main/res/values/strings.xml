@@ -1,3 +1,4 @@
 <resources>
     <string name="app_name">KGN Construction</string>
+    <string name="default_web_client_id" translatable="false">715807070390-be57nktutsnl4j0bckbpn1p48qti8jtc.apps.googleusercontent.com</string>
 </resources>
