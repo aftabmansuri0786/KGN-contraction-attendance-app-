@@ -7,8 +7,12 @@ import androidx.room.OnConflictStrategy
 import androidx.room.Query
 import androidx.room.Update
 import com.example.data.model.AdvanceEntity
+import com.example.data.model.AmavasyaConfigEntity
+import com.example.data.model.AmavasyaSettlementEntity
 import com.example.data.model.AttendanceEntity
+import com.example.data.model.MonthlyPdfEntity
 import com.example.data.model.PaymentEntity
+import com.example.data.model.SettlementAuditEntity
 import com.example.data.model.SiteEntity
 import com.example.data.model.WorkerEntity
 import kotlinx.coroutines.flow.Flow
@@ -20,6 +24,9 @@ interface WorkerDao {
 
     @Query("SELECT * FROM workers WHERE isActive = 1 ORDER BY name ASC")
     fun getActiveWorkers(): Flow<List<WorkerEntity>>
+
+    @Query("SELECT * FROM workers WHERE isActive = 1 ORDER BY name ASC")
+    suspend fun getActiveWorkersSync(): List<WorkerEntity>
 
     @Query("SELECT * FROM workers WHERE id = :id")
     fun getWorkerById(id: String): Flow<WorkerEntity?>
@@ -78,6 +85,9 @@ interface AttendanceDao {
     @Query("SELECT * FROM attendance WHERE date = :date")
     fun getAttendanceForDate(date: String): Flow<List<AttendanceEntity>>
 
+    @Query("SELECT * FROM attendance WHERE date = :date")
+    suspend fun getAttendanceForDateSync(date: String): List<AttendanceEntity>
+
     @Query("SELECT * FROM attendance WHERE date = :date AND siteId = :siteId")
     fun getAttendanceForDateAndSite(date: String, siteId: String): Flow<List<AttendanceEntity>>
 
@@ -135,3 +145,85 @@ interface PaymentDao {
     @Query("DELETE FROM payments")
     suspend fun deleteAllPayments()
 }
+
+@Dao
+interface AmavasyaConfigDao {
+    @Query("SELECT * FROM amavasya_config WHERE id = 'default_config' LIMIT 1")
+    fun getConfig(): Flow<AmavasyaConfigEntity?>
+
+    @Query("SELECT * FROM amavasya_config WHERE id = 'default_config' LIMIT 1")
+    suspend fun getConfigSync(): AmavasyaConfigEntity?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun upsertConfig(config: AmavasyaConfigEntity)
+
+    @Query("DELETE FROM amavasya_config")
+    suspend fun deleteAllConfigs()
+}
+
+@Dao
+interface AmavasyaSettlementDao {
+    @Query("SELECT * FROM amavasya_settlements ORDER BY periodEndDate DESC, settledAt DESC")
+    fun getAllSettlements(): Flow<List<AmavasyaSettlementEntity>>
+
+    @Query("SELECT * FROM amavasya_settlements WHERE workerId = :workerId ORDER BY periodEndDate DESC")
+    fun getSettlementsForWorker(workerId: String): Flow<List<AmavasyaSettlementEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertSettlement(settlement: AmavasyaSettlementEntity)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertSettlements(settlements: List<AmavasyaSettlementEntity>)
+
+    @Query("DELETE FROM amavasya_settlements WHERE id = :id")
+    suspend fun deleteSettlementById(id: String)
+
+    @Query("DELETE FROM amavasya_settlements")
+    suspend fun deleteAllSettlements()
+}
+
+@Dao
+interface SettlementAuditDao {
+    @Query("SELECT * FROM settlement_audits ORDER BY timestamp DESC")
+    fun getAllAudits(): Flow<List<SettlementAuditEntity>>
+
+    @Query("SELECT * FROM settlement_audits WHERE settlementId = :settlementId ORDER BY timestamp DESC")
+    fun getAuditsForSettlement(settlementId: String): Flow<List<SettlementAuditEntity>>
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAudit(audit: SettlementAuditEntity)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertAudits(audits: List<SettlementAuditEntity>)
+
+    @Query("DELETE FROM settlement_audits")
+    suspend fun deleteAllAudits()
+}
+
+@Dao
+interface MonthlyPdfDao {
+    @Query("SELECT * FROM monthly_hisab_pdfs ORDER BY year DESC, month DESC, isCombinedReport DESC, generatedAt DESC")
+    fun getAllMonthlyPdfs(): Flow<List<MonthlyPdfEntity>>
+
+    @Query("SELECT * FROM monthly_hisab_pdfs ORDER BY year DESC, month DESC, isCombinedReport DESC, generatedAt DESC")
+    suspend fun getAllMonthlyPdfsSync(): List<MonthlyPdfEntity>
+
+    @Query("SELECT * FROM monthly_hisab_pdfs WHERE id = :id LIMIT 1")
+    suspend fun getMonthlyPdfByIdSync(id: String): MonthlyPdfEntity?
+
+    @Query("SELECT * FROM monthly_hisab_pdfs WHERE workerId = :workerId AND periodEndDate = :periodEndDate LIMIT 1")
+    suspend fun getByWorkerAndPeriodSync(workerId: String, periodEndDate: String): MonthlyPdfEntity?
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertMonthlyPdf(pdf: MonthlyPdfEntity)
+
+    @Insert(onConflict = OnConflictStrategy.REPLACE)
+    suspend fun insertMonthlyPdfs(pdfs: List<MonthlyPdfEntity>)
+
+    @Query("DELETE FROM monthly_hisab_pdfs WHERE id = :id")
+    suspend fun deleteMonthlyPdfById(id: String)
+
+    @Query("DELETE FROM monthly_hisab_pdfs")
+    suspend fun deleteAllMonthlyPdfs()
+}
+

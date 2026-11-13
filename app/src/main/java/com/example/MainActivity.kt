@@ -1,11 +1,17 @@
 package com.example
 
+import android.Manifest
+import android.content.Intent
+import android.os.Build
 import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.BackHandler
+import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.activity.viewModels
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
@@ -43,9 +49,11 @@ import com.example.ui.components.AddWorkerDialog
 import com.example.ui.components.AppTopBar
 import com.example.ui.components.MessageNotificationDialog
 import com.example.ui.components.RecordTransactionDialog
+import com.example.ui.screens.AmavasyaHisabScreen
 import com.example.ui.screens.AttendanceScreen
 import com.example.ui.screens.AuthScreen
 import com.example.ui.screens.DashboardScreen
+import com.example.ui.screens.MonthlyPdfsScreen
 import com.example.ui.screens.ReportsScreen
 import com.example.ui.screens.SettingsScreen
 import com.example.ui.screens.SitesScreen
@@ -57,6 +65,7 @@ import com.example.ui.viewmodel.KgnViewModel
 import com.example.util.AdMobConfig
 import com.example.util.AppLanguage
 import com.example.util.AppStrings
+import com.example.util.AttendanceReminderManager
 import com.example.util.Formatters
 import com.example.util.NotificationMessageType
 import com.example.util.WorkerMessageData
@@ -64,12 +73,15 @@ import com.example.util.WorkerMessageHelper
 
 class MainActivity : ComponentActivity() {
     private val viewModel: KgnViewModel by viewModels()
+    private var launchOpenTab by mutableStateOf<Int?>(null)
+    private var launchPendingOnly by mutableStateOf(false)
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         // Initialize Google Mobile Ads SDK
         AdMobConfig.initialize(this)
+        extractReminderIntent(intent)
 
         setContent {
             val isDarkTheme by viewModel.isDarkTheme.collectAsStateWithLifecycle()
@@ -98,9 +110,34 @@ class MainActivity : ComponentActivity() {
                     MainScreenContent(
                         viewModel = viewModel,
                         language = language,
-                        isDarkTheme = isDarkTheme
+                        isDarkTheme = isDarkTheme,
+                        initialTabOverride = launchOpenTab,
+                        initialPendingOnly = launchPendingOnly,
+                        onConsumeLaunchIntent = {
+                            launchOpenTab = null
+                            launchPendingOnly = false
+                        }
                     )
                 }
+            }
+        }
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent)
+        extractReminderIntent(intent)
+    }
+
+    private fun extractReminderIntent(intent: Intent?) {
+        if (intent == null) return
+        val tab = intent.getIntExtra(AttendanceReminderManager.EXTRA_OPEN_TAB, -1)
+        val pendingOnly = intent.getBooleanExtra(AttendanceReminderManager.EXTRA_FILTER_PENDING, false)
+        if (tab >= 0) {
+            launchOpenTab = tab
+            launchPendingOnly = pendingOnly
+            if (tab == 1 && pendingOnly) {
+                viewModel.setSelectedDate(Formatters.getTodayIsoDate())
             }
         }
     }
@@ -110,9 +147,13 @@ class MainActivity : ComponentActivity() {
 fun MainScreenContent(
     viewModel: KgnViewModel,
     language: AppLanguage,
-    isDarkTheme: Boolean
+    isDarkTheme: Boolean,
+    initialTabOverride: Int? = null,
+    initialPendingOnly: Boolean = false,
+    onConsumeLaunchIntent: () -> Unit = {}
 ) {
-    var currentTab by remember { mutableIntStateOf(0) } // 0=Home, 1=Attendance, 2=Workers, 3=Wages, 4=Reports, 5=Sites, 6=Settings
+    var currentTab by remember { mutableIntStateOf(0) } // 0=Home, 1=Attendance, 2=Workers, 3=Wages, 4=Reports, 5=Sites, 6=Settings, 7=Amavasya, 8=MonthlyPdfs
+    var attendancePendingOnly by remember { mutableStateOf(false) }
 
     // Dialog States
     var showAddWorkerDialog by remember { mutableStateOf(false) }
@@ -124,6 +165,9 @@ fun MainScreenContent(
     var showAdvanceDialog by remember { mutableStateOf(false) }
     var showPaymentDialog by remember { mutableStateOf(false) }
     var transactionPreselectedWorkerId by remember { mutableStateOf("") }
+    var transactionSuggestedAmount by remember { mutableStateOf<Double?>(null) }
+    var transactionDateOverride by remember { mutableStateOf<String?>(null) }
+    var transactionPeriodTag by remember { mutableStateOf("") }
     var pendingMessageNotification by remember { mutableStateOf<WorkerMessageData?>(null) }
 
     // Collected states
@@ -136,11 +180,41 @@ fun MainScreenContent(
     val metrics by viewModel.dashboardMetrics.collectAsStateWithLifecycle()
     val selectedDate by viewModel.selectedDate.collectAsStateWithLifecycle()
     val selectedSiteId by viewModel.selectedSiteId.collectAsStateWithLifecycle()
+    val amavasyaConfig by viewModel.amavasyaConfig.collectAsStateWithLifecycle()
+    val selectedAmavasyaDate by viewModel.selectedAmavasyaDate.collectAsStateWithLifecycle()
+    val hisabStatements by viewModel.hisabStatements.collectAsStateWithLifecycle()
+    val settlementHistory by viewModel.allSettlements.collectAsStateWithLifecycle()
+    val auditLogs by viewModel.allSettlementAudits.collectAsStateWithLifecycle()
+    val amavasyaSummary by viewModel.amavasyaDashboardSummary.collectAsStateWithLifecycle()
     val ownerPin by viewModel.ownerPin.collectAsStateWithLifecycle()
     val currentUser by viewModel.currentUser.collectAsStateWithLifecycle()
     val isSyncing by viewModel.isSyncing.collectAsStateWithLifecycle()
     val lastSyncTimestamp by viewModel.lastSyncTimestamp.collectAsStateWithLifecycle()
+    val monthlyPdfs by viewModel.allMonthlyPdfs.collectAsStateWithLifecycle()
+    val isGeneratingPdfs by viewModel.isGeneratingPdfs.collectAsStateWithLifecycle()
+    val reminderSettings by viewModel.reminderSettings.collectAsStateWithLifecycle()
     val context = LocalContext.current
+
+    val notifPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) {}
+
+    LaunchedEffect(Unit) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU &&
+            reminderSettings.enabled &&
+            !AttendanceReminderManager.hasNotificationPermission(context)
+        ) {
+            notifPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
+
+    LaunchedEffect(initialTabOverride, initialPendingOnly) {
+        if (initialTabOverride != null) {
+            currentTab = initialTabOverride
+            attendancePendingOnly = initialPendingOnly
+            onConsumeLaunchIntent()
+        }
+    }
 
     // Back handler to return to Home dashboard
     BackHandler(enabled = currentTab != 0) {
@@ -153,6 +227,9 @@ fun MainScreenContent(
                 language = language,
                 isDarkTheme = isDarkTheme,
                 isSyncing = isSyncing,
+                hasAmavasyaReminder = amavasyaSummary.isReminderActive,
+                onOpenAmavasyaHisab = { currentTab = 7 },
+                onOpenMonthlyPdfs = { currentTab = 8 },
                 onSyncClick = { viewModel.syncCloudData() },
                 onToggleLanguage = { viewModel.toggleLanguage() },
                 onToggleTheme = { viewModel.toggleTheme() },
@@ -173,7 +250,10 @@ fun MainScreenContent(
                 )
                 NavigationBarItem(
                     selected = currentTab == 1,
-                    onClick = { currentTab = 1 },
+                    onClick = {
+                        attendancePendingOnly = false
+                        currentTab = 1
+                    },
                     icon = { Icon(Icons.Default.CalendarMonth, contentDescription = "Attendance") },
                     label = { Text(AppStrings.get("attendance", language), fontSize = 10.sp) },
                     colors = NavigationBarItemDefaults.colors(selectedIconColor = ConstructionOrange, indicatorColor = ConstructionOrange.copy(alpha = 0.2f)),
@@ -231,14 +311,26 @@ fun MainScreenContent(
                 0 -> DashboardScreen(
                     language = language,
                     metrics = metrics,
+                    amavasyaSummary = amavasyaSummary,
                     workers = workers,
                     recentAttendance = attendanceRecords,
                     recentPayments = payments,
-                    onNavigateToAttendance = { currentTab = 1 },
+                    monthlyPdfs = monthlyPdfs,
+                    onNavigateToAttendance = {
+                        attendancePendingOnly = false
+                        currentTab = 1
+                    },
+                    onNavigateToPendingAttendance = {
+                        viewModel.setSelectedDate(Formatters.getTodayIsoDate())
+                        attendancePendingOnly = true
+                        currentTab = 1
+                    },
                     onNavigateToWorkers = { currentTab = 2 },
                     onNavigateToSites = { currentTab = 5 },
                     onNavigateToWages = { currentTab = 3 },
                     onNavigateToReports = { currentTab = 4 },
+                    onNavigateToAmavasya = { currentTab = 7 },
+                    onNavigateToMonthlyPdfs = { currentTab = 8 },
                     onAddWorkerClick = {
                         workerToEdit = null
                         showAddWorkerDialog = true
@@ -249,10 +341,15 @@ fun MainScreenContent(
                     },
                     onRecordAdvanceClick = {
                         transactionPreselectedWorkerId = ""
+                        transactionSuggestedAmount = null
+                        transactionDateOverride = null
                         showAdvanceDialog = true
                     },
                     onRecordPaymentClick = {
                         transactionPreselectedWorkerId = ""
+                        transactionSuggestedAmount = null
+                        transactionDateOverride = null
+                        transactionPeriodTag = ""
                         showPaymentDialog = true
                     }
                 )
@@ -264,6 +361,8 @@ fun MainScreenContent(
                     sites = sites,
                     workers = workers,
                     attendanceRecords = attendanceRecords,
+                    pendingOnly = attendancePendingOnly,
+                    onPendingOnlyChanged = { attendancePendingOnly = it },
                     onDateChanged = { viewModel.setSelectedDate(it) },
                     onSiteChanged = { viewModel.setSelectedSite(it) },
                     onMarkAllPresent = { siteId, date -> viewModel.markAllPresent(siteId, date) },
@@ -346,7 +445,8 @@ fun MainScreenContent(
                     sites = sites,
                     attendanceRecords = attendanceRecords,
                     advances = advances,
-                    payments = payments
+                    payments = payments,
+                    onOpenMonthlyPdfs = { currentTab = 8 }
                 )
 
                 5 -> SitesScreen(
@@ -371,6 +471,9 @@ fun MainScreenContent(
                     currentUser = currentUser,
                     isSyncing = isSyncing,
                     lastSyncTimestamp = lastSyncTimestamp,
+                    reminderSettings = reminderSettings,
+                    onUpdateReminderEnabled = { viewModel.setReminderEnabled(it) },
+                    onUpdateReminderTime = { h, m -> viewModel.setReminderTime(h, m) },
                     onSignInWithGoogle = {
                         viewModel.signInWithGoogle(context) { _, _ -> }
                     },
@@ -381,6 +484,64 @@ fun MainScreenContent(
                     onChangePin = { viewModel.changeOwnerPin(it) },
                     onLockApp = { viewModel.lockOwner() },
                     onClearAllData = { viewModel.clearAllData() }
+                )
+
+                7 -> AmavasyaHisabScreen(
+                    language = language,
+                    selectedAmavasyaDate = selectedAmavasyaDate,
+                    isManualDate = amavasyaConfig?.isManualDate ?: false,
+                    reminderDaysBefore = amavasyaConfig?.reminderDaysBefore ?: 3,
+                    dashboardSummary = amavasyaSummary,
+                    statements = hisabStatements,
+                    settlementHistory = settlementHistory,
+                    auditLogs = auditLogs,
+                    onSelectDate = { iso, manual -> viewModel.selectAmavasyaDate(iso, manual) },
+                    onResetToCalculated = { viewModel.resetToCalculatedAmavasya() },
+                    onUpdateReminderDays = { days -> viewModel.updateReminderDays(days) },
+                    onBackToHome = { currentTab = 0 },
+                    onRecordPaymentForWorker = { workerId, suggestedAmount, period, targetDate ->
+                        val today = Formatters.getTodayIsoDate()
+                        transactionPreselectedWorkerId = workerId
+                        transactionSuggestedAmount = suggestedAmount
+                        transactionDateOverride = if (today > targetDate) targetDate else today
+                        transactionPeriodTag = period
+                        showPaymentDialog = true
+                    },
+                    onRecordAdvanceForWorker = { workerId, targetDate ->
+                        val today = Formatters.getTodayIsoDate()
+                        transactionPreselectedWorkerId = workerId
+                        transactionSuggestedAmount = null
+                        transactionDateOverride = if (today > targetDate) targetDate else today
+                        showAdvanceDialog = true
+                    },
+                    onMarkSettlementComplete = { stmt, carryForward, notes ->
+                        viewModel.markSettlementComplete(stmt, carryForward, notes)
+                    },
+                    onAuthorizedCorrection = { stmt, reason, reopen ->
+                        viewModel.performAuthorizedCorrection(stmt, reason, reopen)
+                    },
+                    onUpdateWorkerPhone = { workerId ->
+                        workerToEdit = workers.find { it.id == workerId }
+                        showAddWorkerDialog = true
+                    }
+                )
+
+                8 -> MonthlyPdfsScreen(
+                    language = language,
+                    monthlyPdfs = monthlyPdfs,
+                    workers = workers,
+                    selectedAmavasyaDate = selectedAmavasyaDate,
+                    isGeneratingPdfs = isGeneratingPdfs,
+                    onGenerateAllForPeriod = { force ->
+                        viewModel.generateMonthlyPdfsForPeriod(hisabStatements, forceRegenerate = force)
+                    },
+                    onEnsurePdfReady = { pdf, callback ->
+                        viewModel.ensurePdfLocalFileReady(pdf, callback)
+                    },
+                    onRegeneratePdf = { pdf ->
+                        viewModel.regenerateMonthlyPdf(pdf)
+                    },
+                    onBackToHome = { currentTab = 0 }
                 )
             }
         }
@@ -422,9 +583,11 @@ fun MainScreenContent(
             language = language,
             workers = activeWorkers,
             preSelectedWorkerId = transactionPreselectedWorkerId,
+            transactionDateDisplay = transactionDateOverride?.let { Formatters.formatToIndianDate(it) },
             onDismiss = {
                 showAdvanceDialog = false
                 transactionPreselectedWorkerId = ""
+                transactionDateOverride = null
             },
             onUpdateWorker = { worker ->
                 showAdvanceDialog = false
@@ -432,16 +595,17 @@ fun MainScreenContent(
                 showAddWorkerDialog = true
             },
             onSubmit = { workerId, amount, method, ref, notes ->
-                viewModel.recordAdvance(workerId, amount, method, ref, notes)
+                val effectiveDate = transactionDateOverride ?: Formatters.getTodayIsoDate()
+                viewModel.recordAdvance(workerId, amount, method, ref, notes, dateOverride = transactionDateOverride)
                 val worker = workers.find { it.id == workerId }
                 if (worker != null) {
                     val currentWorkerAdvances = advances.filter { it.workerId == workerId }.sumOf { it.amount }
                     val newTotalAdvance = currentWorkerAdvances + amount
-                    val todayFormatted = Formatters.formatToIndianDate(Formatters.getTodayIsoDate())
+                    val dateFormatted = Formatters.formatToIndianDate(effectiveDate)
                     val preparedMsg = WorkerMessageHelper.buildAdvanceMessage(
                         workerName = worker.name,
                         amount = amount,
-                        date = todayFormatted,
+                        date = dateFormatted,
                         totalAdvanceBalance = newTotalAdvance
                     )
                     pendingMessageNotification = WorkerMessageData(
@@ -450,7 +614,7 @@ fun MainScreenContent(
                         workerMobile = worker.mobile,
                         type = NotificationMessageType.ADVANCE,
                         messageText = preparedMsg,
-                        dateDisplay = todayFormatted,
+                        dateDisplay = dateFormatted,
                         amount = amount,
                         balance = newTotalAdvance
                     )
@@ -465,9 +629,14 @@ fun MainScreenContent(
             language = language,
             workers = activeWorkers,
             preSelectedWorkerId = transactionPreselectedWorkerId,
+            suggestedAmount = transactionSuggestedAmount,
+            transactionDateDisplay = transactionDateOverride?.let { Formatters.formatToIndianDate(it) },
             onDismiss = {
                 showPaymentDialog = false
                 transactionPreselectedWorkerId = ""
+                transactionSuggestedAmount = null
+                transactionDateOverride = null
+                transactionPeriodTag = ""
             },
             onUpdateWorker = { worker ->
                 showPaymentDialog = false
@@ -475,7 +644,16 @@ fun MainScreenContent(
                 showAddWorkerDialog = true
             },
             onSubmit = { workerId, amount, method, ref, notes ->
-                viewModel.recordPayment(workerId, amount, method, ref, notes)
+                val effectiveDate = transactionDateOverride ?: Formatters.getTodayIsoDate()
+                viewModel.recordPayment(
+                    workerId = workerId,
+                    amount = amount,
+                    paymentMethod = method,
+                    reference = ref,
+                    notes = notes,
+                    period = transactionPeriodTag,
+                    dateOverride = transactionDateOverride
+                )
                 val worker = workers.find { it.id == workerId }
                 if (worker != null) {
                     val workerAttendance = attendanceRecords.filter { it.workerId == workerId }
@@ -495,11 +673,11 @@ fun MainScreenContent(
                     }
                     val previousPaid = payments.filter { it.workerId == workerId }.sumOf { it.amount }
                     val remainingBalance = (earnedWages - (previousPaid + amount)).coerceAtLeast(0.0)
-                    val todayFormatted = Formatters.formatToIndianDate(Formatters.getTodayIsoDate())
+                    val dateFormatted = Formatters.formatToIndianDate(effectiveDate)
                     val preparedMsg = WorkerMessageHelper.buildPaymentMessage(
                         workerName = worker.name,
                         amount = amount,
-                        date = todayFormatted,
+                        date = dateFormatted,
                         remainingBalance = remainingBalance
                     )
                     pendingMessageNotification = WorkerMessageData(
@@ -508,7 +686,7 @@ fun MainScreenContent(
                         workerMobile = worker.mobile,
                         type = NotificationMessageType.PAYMENT,
                         messageText = preparedMsg,
-                        dateDisplay = todayFormatted,
+                        dateDisplay = dateFormatted,
                         amount = amount,
                         balance = remainingBalance
                     )

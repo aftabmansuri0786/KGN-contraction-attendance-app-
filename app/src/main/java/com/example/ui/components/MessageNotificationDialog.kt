@@ -77,6 +77,7 @@ fun MessageNotificationDialog(
         NotificationMessageType.ATTENDANCE -> if (language == AppLanguage.HINDI) "हाज़िरी दर्ज हुई (Attendance Saved)" else "Attendance Saved"
         NotificationMessageType.PAYMENT -> if (language == AppLanguage.HINDI) "मज़दूरी भुगतान दर्ज हुआ (Payment Saved)" else "Payment Recorded"
         NotificationMessageType.ADVANCE -> if (language == AppLanguage.HINDI) "एडवांस दर्ज हुआ (Advance Saved)" else "Advance Recorded"
+        NotificationMessageType.AMAVASYA_HISAB -> if (language == AppLanguage.HINDI) "अमावस्या हिसाब विवरण (Hisab Ready)" else "Amavasya Hisab Statement"
     }
 
     AlertDialog(

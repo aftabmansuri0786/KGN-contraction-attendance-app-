@@ -50,7 +50,17 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.foundation.BorderStroke
+import androidx.compose.material.icons.automirrored.filled.ArrowForward
+import androidx.compose.material.icons.filled.AccountBalanceWallet
+import androidx.compose.material.icons.filled.NightsStay
+import androidx.compose.material.icons.filled.NotificationsActive
+import androidx.compose.material.icons.filled.PhotoCamera
+import androidx.compose.material.icons.filled.PictureAsPdf
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.runtime.remember
 import com.example.data.model.AttendanceEntity
+import com.example.data.model.MonthlyPdfEntity
 import com.example.data.model.PaymentEntity
 import com.example.data.model.WorkerEntity
 import com.example.ui.theme.CharcoalDark
@@ -60,28 +70,44 @@ import com.example.ui.theme.StatusHalfDay
 import com.example.ui.theme.StatusPresent
 import com.example.ui.viewmodel.DashboardMetrics
 import com.example.util.AdMobBanner
+import com.example.util.AmavasyaDashboardSummary
 import com.example.util.AppLanguage
 import com.example.util.AppStrings
+import com.example.util.AttendanceReminderManager
 import com.example.util.Formatters
 
 @Composable
 fun DashboardScreen(
     language: AppLanguage,
     metrics: DashboardMetrics,
+    amavasyaSummary: AmavasyaDashboardSummary,
     workers: List<WorkerEntity>,
     recentAttendance: List<AttendanceEntity>,
     recentPayments: List<PaymentEntity>,
+    monthlyPdfs: List<MonthlyPdfEntity> = emptyList(),
     onNavigateToAttendance: () -> Unit,
+    onNavigateToPendingAttendance: () -> Unit = onNavigateToAttendance,
     onNavigateToWorkers: () -> Unit,
     onNavigateToSites: () -> Unit,
     onNavigateToWages: () -> Unit,
     onNavigateToReports: () -> Unit,
+    onNavigateToAmavasya: () -> Unit,
+    onNavigateToMonthlyPdfs: () -> Unit = {},
     onAddWorkerClick: () -> Unit,
     onAddSiteClick: () -> Unit,
     onRecordAdvanceClick: () -> Unit,
     onRecordPaymentClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    val todayIso = remember { Formatters.getTodayIsoDate() }
+    val activeWorkersList = remember(workers) { workers.filter { it.isActive } }
+    val todayRecords = remember(recentAttendance, todayIso) { recentAttendance.filter { it.date == todayIso } }
+    val pendingTodayWorkers = remember(activeWorkersList, todayRecords) {
+        AttendanceReminderManager.findPendingAttendanceWorkers(activeWorkersList, todayRecords)
+    }
+    val missingPhotosCount = remember(activeWorkersList) {
+        activeWorkersList.count { it.localPhotoPath.isBlank() && it.photoUrl.isBlank() }
+    }
     LazyColumn(
         modifier = modifier
             .fillMaxSize()
@@ -190,6 +216,25 @@ fun DashboardScreen(
                     }
                 }
             }
+        }
+
+        // Today's Attendance Completion & Pending Workers Card
+        item {
+            TodayAttendanceCompletionCard(
+                language = language,
+                totalActive = activeWorkersList.size,
+                pendingWorkers = pendingTodayWorkers,
+                onClick = onNavigateToPendingAttendance
+            )
+        }
+
+        // Next Amavasya Hisab Dashboard Card
+        item {
+            NextAmavasyaHisabCard(
+                language = language,
+                summary = amavasyaSummary,
+                onClick = onNavigateToAmavasya
+            )
         }
 
         // 4 Core Structure Cards (as per user attachment mockup)
@@ -326,49 +371,104 @@ fun DashboardScreen(
                         modifier = Modifier.weight(1f).testTag("quick_action_reports")
                     )
                 }
+
+                QuickActionButton(
+                    icon = Icons.Default.NightsStay,
+                    label = AppStrings.get("amavasya_menu", language),
+                    color = ConstructionOrange,
+                    onClick = onNavigateToAmavasya,
+                    modifier = Modifier.fillMaxWidth().testTag("quick_action_amavasya_hisab")
+                )
             }
         }
 
-        // Financial Highlights Strip
+        // Monthly Total Wages & Outstanding Balance Card
         item {
             Card(
                 colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surfaceVariant),
-                shape = RoundedCornerShape(12.dp),
-                modifier = Modifier.fillMaxWidth()
+                shape = RoundedCornerShape(14.dp),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(14.dp))
+                    .clickable(onClick = onNavigateToWages)
+                    .testTag("dashboard_monthly_wages_card")
             ) {
-                Row(
+                Column(
                     modifier = Modifier
                         .fillMaxWidth()
                         .padding(14.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween
+                    verticalArrangement = Arrangement.spacedBy(8.dp)
                 ) {
-                    Column {
-                        Text(
-                            text = AppStrings.get("month_earned", language),
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Text(
-                            text = Formatters.formatInr(metrics.monthEarnedWages),
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Column {
+                            Text(
+                                text = AppStrings.get("month_earned", language),
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                text = Formatters.formatInr(metrics.monthEarnedWages),
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
 
-                    Column(horizontalAlignment = Alignment.End) {
-                        Text(
-                            text = AppStrings.get("total_advances", language),
-                            style = MaterialTheme.typography.labelMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Text(
-                            text = Formatters.formatInr(metrics.totalPendingAdvances),
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold,
-                            color = StatusHalfDay
-                        )
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(
+                                text = AppStrings.get("total_advances", language),
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                text = Formatters.formatInr(metrics.totalPendingAdvances),
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold,
+                                color = StatusHalfDay
+                            )
+                        }
+
+                        Column(horizontalAlignment = Alignment.End) {
+                            Text(
+                                text = AppStrings.get("unpaid_wages", language),
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                text = Formatters.formatInr(metrics.totalUnpaidWages),
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Black,
+                                color = if (metrics.totalUnpaidWages > 0.01) ConstructionOrange else StatusPresent
+                            )
+                        }
                     }
                 }
+            }
+        }
+
+        // Latest Monthly PDF Reports & Worker Photo Status Cards
+        item {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                LatestMonthlyPdfsCard(
+                    language = language,
+                    monthlyPdfs = monthlyPdfs,
+                    onClick = onNavigateToMonthlyPdfs,
+                    modifier = Modifier.weight(1f)
+                )
+
+                WorkerPhotoStatusCard(
+                    language = language,
+                    totalActiveWorkers = activeWorkersList.size,
+                    missingPhotosCount = missingPhotosCount,
+                    onClick = onNavigateToWorkers,
+                    modifier = Modifier.weight(1f)
+                )
             }
         }
 
@@ -585,3 +685,406 @@ private fun QuickActionButton(
         }
     }
 }
+
+@Composable
+private fun NextAmavasyaHisabCard(
+    language: AppLanguage,
+    summary: AmavasyaDashboardSummary,
+    onClick: () -> Unit
+) {
+    val daysBadgeText = when {
+        summary.daysRemaining == 0L -> if (language == AppLanguage.HINDI) "आज हिसाब का दिन" else "Today"
+        summary.daysRemaining > 0L -> if (language == AppLanguage.HINDI) "${summary.daysRemaining} दिन शेष" else "${summary.daysRemaining} Days Left"
+        else -> if (language == AppLanguage.HINDI) "${-summary.daysRemaining} दिन बीत गए" else "${-summary.daysRemaining} Days Overdue"
+    }
+
+    Card(
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        shape = RoundedCornerShape(18.dp),
+        border = BorderStroke(
+            width = if (summary.isReminderActive) 1.5.dp else 1.dp,
+            color = if (summary.isReminderActive) ConstructionOrange else MaterialTheme.colorScheme.outline.copy(alpha = 0.5f)
+        ),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(18.dp))
+            .clickable(onClick = onClick)
+            .testTag("dashboard_next_amavasya_card")
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(38.dp)
+                            .clip(RoundedCornerShape(12.dp))
+                            .background(ConstructionOrange.copy(alpha = 0.14f)),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = if (summary.isReminderActive) Icons.Default.NotificationsActive else Icons.Default.NightsStay,
+                            contentDescription = null,
+                            tint = ConstructionOrange,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
+                    Column {
+                        Text(
+                            text = AppStrings.get("next_amavasya_hisab", language),
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 15.sp,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Text(
+                            text = if (language == AppLanguage.HINDI) summary.lunarNameHi else summary.lunarNameEn,
+                            fontSize = 11.5.sp,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+
+                Surface(
+                    color = if (summary.daysRemaining <= 3) ConstructionOrange else CharcoalDark,
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    Text(
+                        text = daysBadgeText,
+                        color = Color.White,
+                        fontSize = 11.sp,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                    )
+                }
+            }
+
+            Divider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.35f))
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column {
+                    Text(
+                        text = if (language == AppLanguage.HINDI) "अगली तारीख" else "Settlement Date",
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = summary.nextSettlementDateDisplay,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 14.sp
+                    )
+                }
+
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Text(
+                        text = if (language == AppLanguage.HINDI) "बाकी मज़दूर" else "Workers Pending",
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = summary.workersRequiringSettlement.toString(),
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 15.sp,
+                        color = if (summary.workersRequiringSettlement > 0) ConstructionOrange else StatusPresent
+                    )
+                }
+
+                Column(horizontalAlignment = Alignment.End) {
+                    Text(
+                        text = when {
+                            summary.totalPayableAmount > 0.01 -> if (language == AppLanguage.HINDI) "कुल देय राशि" else "Total Payable"
+                            summary.totalAdvanceOutstanding > 0.01 -> if (language == AppLanguage.HINDI) "बकाया एडवांस" else "Adv Outstanding"
+                            else -> AppStrings.get("total_outstanding", language)
+                        },
+                        fontSize = 11.sp,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Text(
+                        text = Formatters.formatInr(summary.totalOutstandingCombined),
+                        fontWeight = FontWeight.Black,
+                        fontSize = 16.sp,
+                        color = when {
+                            summary.totalPayableAmount > 0.01 -> ConstructionOrange
+                            summary.totalAdvanceOutstanding > 0.01 -> StatusAbsent
+                            else -> StatusPresent
+                        }
+                    )
+                }
+            }
+
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.End,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = if (language == AppLanguage.HINDI) "पूरा हिसाब खोलें" else "Open Amavasya Hisab",
+                    fontSize = 12.sp,
+                    fontWeight = FontWeight.Bold,
+                    color = ConstructionOrange
+                )
+                Spacer(modifier = Modifier.width(4.dp))
+                Icon(
+                    imageVector = Icons.AutoMirrored.Filled.ArrowForward,
+                    contentDescription = null,
+                    tint = ConstructionOrange,
+                    modifier = Modifier.size(15.dp)
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun TodayAttendanceCompletionCard(
+    language: AppLanguage,
+    totalActive: Int,
+    pendingWorkers: List<WorkerEntity>,
+    onClick: () -> Unit
+) {
+    val markedCount = (totalActive - pendingWorkers.size).coerceAtLeast(0)
+    val progress = if (totalActive > 0) (markedCount.toFloat() / totalActive.toFloat()).coerceIn(0f, 1f) else 1f
+    val isComplete = totalActive == 0 || pendingWorkers.isEmpty()
+
+    Card(
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        shape = RoundedCornerShape(16.dp),
+        border = BorderStroke(
+            width = 1.dp,
+            color = if (isComplete) StatusPresent.copy(alpha = 0.45f) else ConstructionOrange.copy(alpha = 0.65f)
+        ),
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(16.dp))
+            .clickable(onClick = onClick)
+            .testTag("dashboard_today_attendance_completion_card")
+    ) {
+        Column(
+            modifier = Modifier.padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Icon(
+                        imageVector = if (isComplete) Icons.Default.CheckCircle else Icons.Default.NotificationsActive,
+                        contentDescription = null,
+                        tint = if (isComplete) StatusPresent else ConstructionOrange,
+                        modifier = Modifier.size(20.dp)
+                    )
+                    Text(
+                        text = if (language == AppLanguage.HINDI) "आज की हाज़िरी प्रगति" else "Today's Attendance",
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 14.sp
+                    )
+                }
+
+                Surface(
+                    color = if (isComplete) StatusPresent.copy(alpha = 0.14f) else ConstructionOrange.copy(alpha = 0.14f),
+                    shape = RoundedCornerShape(10.dp)
+                ) {
+                    Text(
+                        text = if (isComplete) {
+                            if (language == AppLanguage.HINDI) "पूर्ण ($markedCount/$totalActive)" else "Complete ($markedCount/$totalActive)"
+                        } else {
+                            if (language == AppLanguage.HINDI) "${pendingWorkers.size} बाकी ($markedCount/$totalActive)" else "${pendingWorkers.size} Pending ($markedCount/$totalActive)"
+                        },
+                        color = if (isComplete) StatusPresent else ConstructionOrange,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 11.sp,
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                    )
+                }
+            }
+
+            LinearProgressIndicator(
+                progress = { progress },
+                color = if (isComplete) StatusPresent else ConstructionOrange,
+                trackColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(6.dp)
+                    .clip(RoundedCornerShape(3.dp))
+            )
+
+            if (pendingWorkers.isNotEmpty()) {
+                val names = pendingWorkers.take(3).joinToString(", ") { it.name } +
+                    if (pendingWorkers.size > 3) " +${pendingWorkers.size - 3}" else ""
+                Text(
+                    text = if (language == AppLanguage.HINDI) {
+                        "बाकी मज़दूर: $names • 6:30 PM रिमाइंडर सक्रिय"
+                    } else {
+                        "Pending: $names • Tap to mark"
+                    },
+                    fontSize = 11.5.sp,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            } else {
+                Text(
+                    text = if (language == AppLanguage.HINDI) {
+                        "सभी सक्रिय मज़दूरों की आज की हाज़िरी दर्ज हो चुकी है।"
+                    } else {
+                        "All active workers have attendance recorded for today."
+                    },
+                    fontSize = 11.5.sp,
+                    color = StatusPresent
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun LatestMonthlyPdfsCard(
+    language: AppLanguage,
+    monthlyPdfs: List<MonthlyPdfEntity>,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val latestMonthLabel = monthlyPdfs.maxByOrNull { it.generatedAt }?.monthLabel ?: "--"
+    Card(
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        shape = RoundedCornerShape(14.dp),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)),
+        modifier = modifier
+            .clip(RoundedCornerShape(14.dp))
+            .clickable(onClick = onClick)
+            .testTag("dashboard_latest_pdfs_card")
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(5.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(30.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(ConstructionOrange.copy(alpha = 0.14f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.PictureAsPdf,
+                        contentDescription = null,
+                        tint = ConstructionOrange,
+                        modifier = Modifier.size(17.dp)
+                    )
+                }
+                Text(
+                    text = "${monthlyPdfs.size} PDFs",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 12.sp,
+                    color = ConstructionOrange
+                )
+            }
+            Text(
+                text = AppStrings.get("monthly_pdfs_menu", language),
+                fontWeight = FontWeight.Bold,
+                fontSize = 13.sp,
+                maxLines = 1
+            )
+            Text(
+                text = if (monthlyPdfs.isEmpty()) {
+                    if (language == AppLanguage.HINDI) "कोई मासिक PDF नहीं" else "No PDFs saved yet"
+                } else {
+                    if (language == AppLanguage.HINDI) "नवीनतम: $latestMonthLabel" else "Latest: $latestMonthLabel"
+                },
+                fontSize = 11.sp,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                maxLines = 1
+            )
+        }
+    }
+}
+
+@Composable
+private fun WorkerPhotoStatusCard(
+    language: AppLanguage,
+    totalActiveWorkers: Int,
+    missingPhotosCount: Int,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val accent = if (missingPhotosCount > 0) StatusHalfDay else StatusPresent
+    Card(
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        shape = RoundedCornerShape(14.dp),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.35f)),
+        modifier = modifier
+            .clip(RoundedCornerShape(14.dp))
+            .clickable(onClick = onClick)
+            .testTag("dashboard_worker_photos_card")
+    ) {
+        Column(
+            modifier = Modifier.padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(5.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(30.dp)
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(accent.copy(alpha = 0.14f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.PhotoCamera,
+                        contentDescription = null,
+                        tint = accent,
+                        modifier = Modifier.size(17.dp)
+                    )
+                }
+                Text(
+                    text = "$totalActiveWorkers Active",
+                    fontWeight = FontWeight.Bold,
+                    fontSize = 12.sp,
+                    color = accent
+                )
+            }
+            Text(
+                text = if (language == AppLanguage.HINDI) "मज़दूर प्रोफ़ाइल फ़ोटो" else "Worker Photos",
+                fontWeight = FontWeight.Bold,
+                fontSize = 13.sp,
+                maxLines = 1
+            )
+            Text(
+                text = if (missingPhotosCount > 0) {
+                    if (language == AppLanguage.HINDI) "$missingPhotosCount मज़दूरों की फ़ोटो बाकी" else "$missingPhotosCount missing photo"
+                } else {
+                    if (language == AppLanguage.HINDI) "सभी फ़ोटो अपडेट हैं" else "All photos uploaded"
+                },
+                fontSize = 11.sp,
+                color = accent,
+                maxLines = 1
+            )
+        }
+    }
+}
+
+

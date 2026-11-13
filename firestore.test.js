@@ -68,3 +68,24 @@ test("Cross-user access: Bob cannot access Alice's records", async () => {
   await assertFails(bobDb.collection("users").doc(ALICE_UID).collection("workers").doc("w1").get());
   await assertFails(bobDb.collection("users").doc(ALICE_UID).collection("workers").doc("w1").delete());
 });
+
+test("Authenticated owner: can read/write own Amavasya settlements and audits, cross-user denied", async () => {
+  const aliceDb = testEnv.authenticatedContext(ALICE_UID).firestore();
+  await assertSucceeds(aliceDb.collection("users").doc(ALICE_UID).collection("settlements").doc("s1").set({
+    id: "s1",
+    workerId: "w1",
+    periodEndDate: "2026-11-09",
+    status: "COMPLETED"
+  }));
+  await assertSucceeds(aliceDb.collection("users").doc(ALICE_UID).collection("settlement_audits").doc("a1").set({
+    id: "a1",
+    settlementId: "s1",
+    workerId: "w1",
+    action: "SETTLED_FULL"
+  }));
+
+  const bobDb = testEnv.authenticatedContext(BOB_UID).firestore();
+  await assertFails(bobDb.collection("users").doc(ALICE_UID).collection("settlements").doc("s1").get());
+  await assertFails(bobDb.collection("users").doc(ALICE_UID).collection("settlement_audits").doc("a1").get());
+});
+

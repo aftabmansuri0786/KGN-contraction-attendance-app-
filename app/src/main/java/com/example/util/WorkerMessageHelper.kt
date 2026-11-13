@@ -11,7 +11,8 @@ import java.net.URLEncoder
 enum class NotificationMessageType {
     ATTENDANCE,
     PAYMENT,
-    ADVANCE
+    ADVANCE,
+    AMAVASYA_HISAB
 }
 
 data class WorkerMessageData(
@@ -88,6 +89,49 @@ object WorkerMessageHelper {
         val amountStr = if (amount % 1.0 == 0.0) amount.toLong().toString() else String.format("%.2f", amount)
         val totalAdvStr = if (totalAdvanceBalance % 1.0 == 0.0) totalAdvanceBalance.toLong().toString() else String.format("%.2f", totalAdvanceBalance)
         return "Dear $workerName, an advance of ₹$amountStr has been recorded on $date. Total outstanding advance: ₹$totalAdvStr. Regards, KGN Construction."
+    }
+
+    private fun formatRupeeNumber(amount: Double): String {
+        val rounded = kotlin.math.round(amount * 100.0) / 100.0
+        return if (rounded % 1.0 == 0.0) rounded.toLong().toString() else String.format("%.2f", rounded)
+    }
+
+    fun buildAmavasyaHisabMessage(statement: WorkerHisabStatement): String {
+        val prevBalText = when {
+            statement.previousBalance > 0.01 -> "₹${formatRupeeNumber(statement.previousBalance)} (Payable B/F)"
+            statement.previousBalance < -0.01 -> "-₹${formatRupeeNumber(-statement.previousBalance)} (Advance B/F)"
+            else -> "₹0"
+        }
+
+        val balanceLines = when {
+            statement.payableAmount > 0.01 ->
+                "Final Payable Amount (To Worker): ₹${formatRupeeNumber(statement.payableAmount)}\n" +
+                    "Final Outstanding Amount (Advance Due): ₹0"
+            statement.outstandingAdvanceAmount > 0.01 ->
+                "Final Payable Amount (To Worker): ₹0\n" +
+                    "Final Outstanding Amount (Advance Due): ₹${formatRupeeNumber(statement.outstandingAdvanceAmount)}"
+            else ->
+                "Final Payable Amount (To Worker): ₹0\n" +
+                    "Final Outstanding Amount: ₹0 (Account Settled)"
+        }
+
+        return buildString {
+            appendLine("Dear ${statement.worker.name},")
+            appendLine()
+            appendLine("Your KGN Construction account statement for the period ${statement.periodDisplay} is ready.")
+            appendLine()
+            appendLine("Total Earnings: ₹${formatRupeeNumber(statement.totalEarnings)}")
+            appendLine("Overtime: ₹${formatRupeeNumber(statement.totalOvertimeAmount)}")
+            appendLine("Previous Balance: $prevBalText")
+            appendLine("Advances: ₹${formatRupeeNumber(statement.advancesTaken)}")
+            appendLine("Payments: ₹${formatRupeeNumber(statement.paymentsMade)}")
+            appendLine(balanceLines)
+            appendLine()
+            appendLine("Please review your account statement.")
+            appendLine()
+            appendLine("Regards,")
+            append("KGN Construction")
+        }
     }
 
     fun openWhatsApp(context: Context, mobile: String, message: String) {

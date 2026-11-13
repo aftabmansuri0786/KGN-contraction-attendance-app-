@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<paths>
+    <cache-path name="hisab_pdfs" path="hisab_pdfs/" />
+    <cache-path name="camera_temp" path="camera_temp/" />
+    <files-path name="worker_photos" path="worker_photos/" />
+    <files-path name="monthly_hisab_pdfs" path="monthly_hisab_pdfs/" />
+</paths>

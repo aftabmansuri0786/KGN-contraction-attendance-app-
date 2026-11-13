@@ -17,6 +17,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -47,6 +48,7 @@ import com.example.data.model.AttendanceEntity
 import com.example.data.model.PaymentEntity
 import com.example.data.model.SiteEntity
 import com.example.data.model.WorkerEntity
+import com.example.ui.components.WorkerAvatar
 import com.example.ui.theme.ConstructionOrange
 import com.example.ui.theme.StatusAbsent
 import com.example.ui.theme.StatusHalfDay
@@ -63,6 +65,7 @@ fun ReportsScreen(
     attendanceRecords: List<AttendanceEntity>,
     advances: List<AdvanceEntity>,
     payments: List<PaymentEntity>,
+    onOpenMonthlyPdfs: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
@@ -201,6 +204,18 @@ fun ReportsScreen(
             }
         }
 
+        Spacer(modifier = Modifier.height(8.dp))
+
+        OutlinedButton(
+            onClick = onOpenMonthlyPdfs,
+            shape = RoundedCornerShape(8.dp),
+            modifier = Modifier.fillMaxWidth().testTag("reports_open_monthly_pdfs_btn")
+        ) {
+            Icon(Icons.Default.PictureAsPdf, contentDescription = null, tint = ConstructionOrange, modifier = Modifier.size(16.dp))
+            Spacer(modifier = Modifier.width(6.dp))
+            Text(AppStrings.get("monthly_pdfs_menu", language), fontSize = 12.sp, fontWeight = FontWeight.Bold)
+        }
+
         Spacer(modifier = Modifier.height(12.dp))
 
         // Financial Metrics Summary Card
@@ -324,16 +339,29 @@ fun ReportsScreen(
                         horizontalArrangement = Arrangement.SpaceBetween,
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        Column {
-                            Text(
-                                text = worker?.name ?: "Worker ${att.workerId}",
-                                fontWeight = FontWeight.SemiBold
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.weight(1f)
+                        ) {
+                            WorkerAvatar(
+                                workerName = worker?.name ?: att.workerId,
+                                localPhotoPath = worker?.localPhotoPath.orEmpty(),
+                                photoUrl = worker?.photoUrl.orEmpty(),
+                                isActive = worker?.isActive ?: true,
+                                size = 36.dp
                             )
-                            Text(
-                                text = "${Formatters.formatToIndianDate(att.date)} • ${site?.name ?: "General"}",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSurfaceVariant
-                            )
+                            Spacer(modifier = Modifier.width(10.dp))
+                            Column {
+                                Text(
+                                    text = worker?.name ?: "Worker ${att.workerId}",
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                                Text(
+                                    text = "${Formatters.formatToIndianDate(att.date)} • ${site?.name ?: "General"}",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                                )
+                            }
                         }
 
                         Column(horizontalAlignment = Alignment.End) {

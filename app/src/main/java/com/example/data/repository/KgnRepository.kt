@@ -2,12 +2,15 @@ package com.example.data.repository
 
 import com.example.data.local.AppDatabase
 import com.example.data.model.AdvanceEntity
+import com.example.data.model.AmavasyaConfigEntity
+import com.example.data.model.AmavasyaSettlementEntity
 import com.example.data.model.AttendanceEntity
+import com.example.data.model.MonthlyPdfEntity
 import com.example.data.model.PaymentEntity
+import com.example.data.model.SettlementAuditEntity
 import com.example.data.model.SiteEntity
 import com.example.data.model.WorkerEntity
 import kotlinx.coroutines.flow.Flow
-import java.util.UUID
 
 data class WorkerLedgerSummary(
     val worker: WorkerEntity,
@@ -25,6 +28,10 @@ class KgnRepository(private val db: AppDatabase) {
     private val attendanceDao = db.attendanceDao()
     private val advanceDao = db.advanceDao()
     private val paymentDao = db.paymentDao()
+    private val amavasyaConfigDao = db.amavasyaConfigDao()
+    private val amavasyaSettlementDao = db.amavasyaSettlementDao()
+    private val settlementAuditDao = db.settlementAuditDao()
+    private val monthlyPdfDao = db.monthlyPdfDao()
 
     val allWorkers: Flow<List<WorkerEntity>> = workerDao.getAllWorkers()
     val activeWorkers: Flow<List<WorkerEntity>> = workerDao.getActiveWorkers()
@@ -33,12 +40,18 @@ class KgnRepository(private val db: AppDatabase) {
     val allAttendance: Flow<List<AttendanceEntity>> = attendanceDao.getAllAttendance()
     val allAdvances: Flow<List<AdvanceEntity>> = advanceDao.getAllAdvances()
     val allPayments: Flow<List<PaymentEntity>> = paymentDao.getAllPayments()
+    val amavasyaConfig: Flow<AmavasyaConfigEntity?> = amavasyaConfigDao.getConfig()
+    val allSettlements: Flow<List<AmavasyaSettlementEntity>> = amavasyaSettlementDao.getAllSettlements()
+    val allSettlementAudits: Flow<List<SettlementAuditEntity>> = settlementAuditDao.getAllAudits()
+    val allMonthlyPdfs: Flow<List<MonthlyPdfEntity>> = monthlyPdfDao.getAllMonthlyPdfs()
 
     fun getWorkerById(id: String): Flow<WorkerEntity?> = workerDao.getWorkerById(id)
     fun getAttendanceForDate(date: String): Flow<List<AttendanceEntity>> = attendanceDao.getAttendanceForDate(date)
     fun getAttendanceForWorker(workerId: String): Flow<List<AttendanceEntity>> = attendanceDao.getAttendanceForWorker(workerId)
     fun getAdvancesForWorker(workerId: String): Flow<List<AdvanceEntity>> = advanceDao.getAdvancesForWorker(workerId)
     fun getPaymentsForWorker(workerId: String): Flow<List<PaymentEntity>> = paymentDao.getPaymentsForWorker(workerId)
+    fun getSettlementsForWorker(workerId: String): Flow<List<AmavasyaSettlementEntity>> =
+        amavasyaSettlementDao.getSettlementsForWorker(workerId)
 
     suspend fun saveWorker(worker: WorkerEntity) {
         workerDao.insertWorker(worker)
@@ -104,11 +117,44 @@ class KgnRepository(private val db: AppDatabase) {
         paymentDao.deletePaymentById(id)
     }
 
+    suspend fun saveAmavasyaConfig(config: AmavasyaConfigEntity) {
+        amavasyaConfigDao.upsertConfig(config)
+    }
+
+    suspend fun saveSettlement(settlement: AmavasyaSettlementEntity) {
+        amavasyaSettlementDao.insertSettlement(settlement)
+    }
+
+    suspend fun deleteSettlement(id: String) {
+        amavasyaSettlementDao.deleteSettlementById(id)
+    }
+
+    suspend fun saveSettlementAudit(audit: SettlementAuditEntity) {
+        settlementAuditDao.insertAudit(audit)
+    }
+
+    suspend fun getMonthlyPdfByWorkerAndPeriod(workerId: String, periodEndDate: String): MonthlyPdfEntity? {
+        return monthlyPdfDao.getByWorkerAndPeriodSync(workerId, periodEndDate)
+    }
+
+    suspend fun saveMonthlyPdf(pdf: MonthlyPdfEntity) {
+        monthlyPdfDao.insertMonthlyPdf(pdf)
+    }
+
+    suspend fun deleteMonthlyPdf(id: String) {
+        monthlyPdfDao.deleteMonthlyPdfById(id)
+    }
+
     suspend fun clearAllData() {
         workerDao.deleteAllWorkers()
         siteDao.deleteAllSites()
         attendanceDao.deleteAllAttendance()
         advanceDao.deleteAllAdvances()
         paymentDao.deleteAllPayments()
+        amavasyaConfigDao.deleteAllConfigs()
+        amavasyaSettlementDao.deleteAllSettlements()
+        settlementAuditDao.deleteAllAudits()
+        monthlyPdfDao.deleteAllMonthlyPdfs()
     }
 }
+

@@ -116,7 +116,21 @@ object AppStrings {
         "no_workers_found" to ("No workers added yet. Tap below to add your first worker." to "कोई मज़दूर नहीं जुड़ा। पहला मज़दूर जोड़ने के लिए नीचे टैप करें।"),
         "no_sites_found" to ("No sites added yet. Add your first construction project." to "कोई साइट नहीं जुड़ी। अपनी पहली कंस्ट्रक्शन साइट जोड़ें।"),
         "no_attendance_records" to ("No attendance marked for this date." to "इस तारीख की कोई हाज़िरी दर्ज नहीं है।"),
-        "no_transactions" to ("No transactions recorded yet." to "अभी तक कोई लेन-देन दर्ज नहीं है।")
+        "no_transactions" to ("No transactions recorded yet." to "अभी तक कोई लेन-देन दर्ज नहीं है।"),
+
+        // Amavasya Monthly Hisab
+        "amavasya_menu" to ("Amavasya / Hisab Ka Din" to "अमावस्या / हिसाब का दिन"),
+        "next_amavasya_hisab" to ("Next Amavasya Hisab" to "अगला अमावस्या हिसाब"),
+        "days_remaining" to ("Days Remaining" to "शेष दिन"),
+        "workers_need_hisab" to ("Workers Pending Hisab" to "हिसाब बाकी मज़दूर"),
+        "total_outstanding" to ("Total Outstanding" to "कुल बकाया राशि"),
+        "view_full_hisab" to ("View Full Hisab" to "पूरा हिसाब देखें"),
+        "mark_settlement_complete" to ("Mark Settlement Complete" to "हिसाब पूर्ण करें"),
+        "send_hisab_whatsapp" to ("Send Hisab on WhatsApp" to "WhatsApp पर हिसाब भेजें"),
+        "send_hisab_sms" to ("Send Hisab by SMS" to "SMS द्वारा हिसाब भेजें"),
+        "export_share_pdf" to ("Export & Share PDF" to "PDF डाउनलोड / शेयर करें"),
+        "monthly_pdfs_menu" to ("Monthly Hisab PDFs" to "मासिक हिसाब PDFs"),
+        "missing_photos" to ("Missing Photos" to "बिना फ़ोटो मज़दूर")
     )
 
     fun get(key: String, language: AppLanguage): String {

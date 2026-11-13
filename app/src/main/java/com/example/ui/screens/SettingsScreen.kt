@@ -1,6 +1,11 @@
 package com.example.ui.screens
 
+import android.Manifest
+import android.app.TimePickerDialog
+import android.os.Build
 import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -16,13 +21,15 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Campaign
 import androidx.compose.material.icons.filled.AccountCircle
+import androidx.compose.material.icons.filled.AccessTime
+import androidx.compose.material.icons.filled.Campaign
 import androidx.compose.material.icons.filled.CloudDone
 import androidx.compose.material.icons.filled.CloudSync
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.NotificationsActive
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Sync
 import androidx.compose.material.icons.filled.Translate
@@ -44,6 +51,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -56,11 +64,15 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.example.ui.theme.ConstructionOrange
+import com.example.ui.theme.StatusAbsent
 import com.example.ui.theme.StatusPresent
 import com.example.util.AppLanguage
 import com.example.util.AppStrings
+import com.example.util.AttendanceReminderManager
+import com.example.util.AttendanceReminderSettings
 import com.example.util.Formatters
 import com.google.firebase.auth.FirebaseUser
+import kotlinx.coroutines.launch
 
 @Composable
 fun SettingsScreen(
@@ -70,6 +82,9 @@ fun SettingsScreen(
     currentUser: FirebaseUser? = null,
     isSyncing: Boolean = false,
     lastSyncTimestamp: Long? = null,
+    reminderSettings: AttendanceReminderSettings = AttendanceReminderSettings(),
+    onUpdateReminderEnabled: (Boolean) -> Unit = {},
+    onUpdateReminderTime: (Int, Int) -> Unit = { _, _ -> },
     onSignInWithGoogle: () -> Unit = {},
     onSignOutGoogle: () -> Unit = {},
     onSyncNow: () -> Unit = {},
@@ -81,6 +96,22 @@ fun SettingsScreen(
     modifier: Modifier = Modifier
 ) {
     val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var hasNotifPermission by remember { mutableStateOf(AttendanceReminderManager.hasNotificationPermission(context)) }
+    val notifPermissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        hasNotifPermission = granted
+        if (!granted) {
+            Toast.makeText(
+                context,
+                if (language == AppLanguage.HINDI) "रिमाइंडर के लिए नोटिफिकेशन अनुमति ज़रूरी है" else "Notification permission denied. Enable in system settings to receive reminders.",
+                Toast.LENGTH_LONG
+            ).show()
+        } else {
+            onUpdateReminderEnabled(true)
+        }
+    }
     var newPinText by remember { mutableStateOf("") }
     var confirmPinText by remember { mutableStateOf("") }
     var showClearConfirmDialog by remember { mutableStateOf(false) }
@@ -193,6 +224,144 @@ fun SettingsScreen(
                         checked = isDarkTheme,
                         onCheckedChange = { onToggleTheme() }
                     )
+                }
+            }
+        }
+
+        // Daily Attendance Reminder Card (6:30 PM IST Default)
+        Card(
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            shape = RoundedCornerShape(12.dp),
+            modifier = Modifier.fillMaxWidth().testTag("settings_attendance_reminder_card")
+        ) {
+            Column(
+                modifier = Modifier.padding(14.dp),
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                        Icon(Icons.Default.NotificationsActive, contentDescription = null, tint = ConstructionOrange)
+                        Spacer(modifier = Modifier.width(10.dp))
+                        Column {
+                            Text(
+                                text = if (language == AppLanguage.HINDI) "दैनिक हाज़िरी रिमाइंडर" else "Daily Attendance Reminder",
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = if (language == AppLanguage.HINDI) {
+                                    "बाकी मज़दूरों के लिए शाम ${AttendanceReminderManager.formatTime12Hour(reminderSettings.hour, reminderSettings.minute)}"
+                                } else {
+                                    "Alerts for pending workers at ${AttendanceReminderManager.formatTime12Hour(reminderSettings.hour, reminderSettings.minute)}"
+                                },
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+
+                    Switch(
+                        checked = reminderSettings.enabled,
+                        onCheckedChange = { checked ->
+                            if (checked && !hasNotifPermission && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                                notifPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                            } else {
+                                onUpdateReminderEnabled(checked)
+                            }
+                        },
+                        modifier = Modifier.testTag("reminder_enable_switch")
+                    )
+                }
+
+                if (!hasNotifPermission && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    Surface(
+                        color = StatusAbsent.copy(alpha = 0.1f),
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(10.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = if (language == AppLanguage.HINDI) "नोटिफिकेशन अनुमति बंद है" else "Notification permission required",
+                                fontSize = 11.5.sp,
+                                color = StatusAbsent,
+                                fontWeight = FontWeight.SemiBold,
+                                modifier = Modifier.weight(1f)
+                            )
+                            OutlinedButton(
+                                onClick = { notifPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS) },
+                                shape = RoundedCornerShape(8.dp)
+                            ) {
+                                Text(if (language == AppLanguage.HINDI) "अनुमति दें" else "Grant", fontSize = 11.sp)
+                            }
+                        }
+                    }
+                }
+
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    OutlinedButton(
+                        onClick = {
+                            TimePickerDialog(
+                                context,
+                                { _, pickedHour, pickedMinute ->
+                                    onUpdateReminderTime(pickedHour, pickedMinute)
+                                    Toast.makeText(
+                                        context,
+                                        "Reminder set to ${AttendanceReminderManager.formatTime12Hour(pickedHour, pickedMinute)}",
+                                        Toast.LENGTH_SHORT
+                                    ).show()
+                                },
+                                reminderSettings.hour,
+                                reminderSettings.minute,
+                                false
+                            ).show()
+                        },
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.weight(1f).testTag("reminder_change_time_btn")
+                    ) {
+                        Icon(Icons.Default.AccessTime, contentDescription = null, modifier = Modifier.size(16.dp), tint = ConstructionOrange)
+                        Spacer(modifier = Modifier.width(6.dp))
+                        Text(
+                            text = AttendanceReminderManager.formatTime12Hour(reminderSettings.hour, reminderSettings.minute),
+                            fontSize = 11.5.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
+
+                    OutlinedButton(
+                        onClick = {
+                            if (!hasNotifPermission && Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                                notifPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+                            } else {
+                                scope.launch {
+                                    val sent = AttendanceReminderManager.evaluateAndShowReminderNow(
+                                        context,
+                                        forceDemoIfNonePending = true
+                                    )
+                                    if (!sent) {
+                                        Toast.makeText(context, "Could not show notification", Toast.LENGTH_SHORT).show()
+                                    }
+                                }
+                            }
+                        },
+                        shape = RoundedCornerShape(8.dp),
+                        modifier = Modifier.weight(1f).testTag("reminder_test_btn")
+                    ) {
+                        Text(
+                            text = if (language == AppLanguage.HINDI) "टेस्ट नोटिफिकेशन" else "Test Reminder",
+                            fontSize = 11.5.sp,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
                 }
             }
         }

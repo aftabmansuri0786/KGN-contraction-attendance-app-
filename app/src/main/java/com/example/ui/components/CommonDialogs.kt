@@ -1,11 +1,17 @@
 package com.example.ui.components
 
 import android.content.Context
+import android.net.Uri
+import android.widget.Toast
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.PickVisualMediaRequest
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -19,12 +25,15 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Business
+import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.CurrencyRupee
+import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material.icons.filled.Payment
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Phone
+import androidx.compose.material.icons.filled.PhotoLibrary
 import androidx.compose.material.icons.filled.Receipt
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.AlertDialog
@@ -74,6 +83,8 @@ import com.example.util.AppLanguage
 import com.example.util.AppStrings
 import com.example.util.Formatters
 import com.example.util.WorkerMessageHelper
+import com.example.util.WorkerPhotoHelper
+import java.io.File
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -84,6 +95,7 @@ fun AddWorkerDialog(
     onDismiss: () -> Unit,
     onSave: (WorkerEntity) -> Unit
 ) {
+    val context = LocalContext.current
     var name by remember { mutableStateOf(workerToEdit?.name ?: "") }
     var mobileDigits by remember {
         mutableStateOf(
@@ -95,6 +107,44 @@ fun AddWorkerDialog(
     var otRateText by remember { mutableStateOf(workerToEdit?.overtimeHourlyRate?.takeIf { it > 0 }?.toInt()?.toString() ?: "") }
     var selectedSiteId by remember { mutableStateOf(workerToEdit?.siteId ?: (sites.firstOrNull()?.id ?: "")) }
     var notes by remember { mutableStateOf(workerToEdit?.notes ?: "") }
+
+    var localPhotoPath by remember { mutableStateOf(workerToEdit?.localPhotoPath ?: "") }
+    var photoUrl by remember { mutableStateOf(workerToEdit?.photoUrl ?: "") }
+    var photoStoragePath by remember { mutableStateOf(workerToEdit?.photoStoragePath ?: "") }
+    var photoRemoved by remember { mutableStateOf(false) }
+    var pendingCameraUri by remember { mutableStateOf<Uri?>(null) }
+    var pendingCameraFile by remember { mutableStateOf<File?>(null) }
+    val draftPhotoKey = remember { workerToEdit?.id ?: "draft_${System.currentTimeMillis()}" }
+
+    val galleryLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia()
+    ) { uri ->
+        if (uri != null) {
+            val saved = WorkerPhotoHelper.saveCompressedPhotoFromUri(context, uri, draftPhotoKey)
+            if (saved != null) {
+                localPhotoPath = saved.absolutePath
+                photoRemoved = false
+            } else {
+                Toast.makeText(context, "Could not load selected photo", Toast.LENGTH_SHORT).show()
+            }
+        }
+    }
+
+    val cameraLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.TakePicture()
+    ) { success ->
+        val camUri = pendingCameraUri
+        if (success && camUri != null) {
+            val saved = WorkerPhotoHelper.saveCompressedPhotoFromUri(context, camUri, draftPhotoKey)
+            if (saved != null) {
+                localPhotoPath = saved.absolutePath
+                photoRemoved = false
+            }
+        }
+        pendingCameraFile?.delete()
+        pendingCameraUri = null
+        pendingCameraFile = null
+    }
 
     var categoryExpanded by remember { mutableStateOf(false) }
     var siteExpanded by remember { mutableStateOf(false) }
@@ -118,6 +168,93 @@ fun AddWorkerDialog(
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
+                // Worker Profile Photo Picker & Camera Row
+                Surface(
+                    color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.55f),
+                    shape = RoundedCornerShape(12.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(10.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        WorkerAvatar(
+                            workerName = name.ifBlank { "W" },
+                            localPhotoPath = if (photoRemoved) "" else localPhotoPath,
+                            photoUrl = if (photoRemoved) "" else photoUrl,
+                            size = 64.dp,
+                            modifier = Modifier.testTag("worker_photo_preview")
+                        )
+
+                        Column(
+                            modifier = Modifier.weight(1f),
+                            verticalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Text(
+                                text = if (language == AppLanguage.HINDI) "मज़दूर की फ़ोटो (वैकल्पिक)" else "Profile Photo",
+                                fontWeight = FontWeight.SemiBold,
+                                fontSize = 13.sp
+                            )
+                            Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                                OutlinedButton(
+                                    onClick = {
+                                        val created = WorkerPhotoHelper.createTempCameraUri(context)
+                                        if (created != null) {
+                                            pendingCameraUri = created.first
+                                            pendingCameraFile = created.second
+                                            cameraLauncher.launch(created.first)
+                                        }
+                                    },
+                                    shape = RoundedCornerShape(8.dp),
+                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                                    modifier = Modifier.height(36.dp).testTag("worker_photo_camera_btn")
+                                ) {
+                                    Icon(Icons.Default.CameraAlt, contentDescription = "Camera", modifier = Modifier.size(15.dp))
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(if (language == AppLanguage.HINDI) "कैमरा" else "Camera", fontSize = 11.sp)
+                                }
+
+                                OutlinedButton(
+                                    onClick = {
+                                        galleryLauncher.launch(
+                                            PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)
+                                        )
+                                    },
+                                    shape = RoundedCornerShape(8.dp),
+                                    contentPadding = PaddingValues(horizontal = 8.dp, vertical = 4.dp),
+                                    modifier = Modifier.height(36.dp).testTag("worker_photo_gallery_btn")
+                                ) {
+                                    Icon(Icons.Default.PhotoLibrary, contentDescription = "Gallery", modifier = Modifier.size(15.dp))
+                                    Spacer(modifier = Modifier.width(4.dp))
+                                    Text(if (language == AppLanguage.HINDI) "गैलरी" else "Gallery", fontSize = 11.sp)
+                                }
+
+                                if (!photoRemoved && (localPhotoPath.isNotBlank() || photoUrl.isNotBlank())) {
+                                    IconButton(
+                                        onClick = {
+                                            localPhotoPath = ""
+                                            photoUrl = ""
+                                            photoStoragePath = ""
+                                            photoRemoved = true
+                                        },
+                                        modifier = Modifier.size(36.dp).testTag("worker_photo_remove_btn")
+                                    ) {
+                                        Icon(
+                                            Icons.Default.DeleteOutline,
+                                            contentDescription = "Remove Photo",
+                                            tint = StatusAbsent,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
                 OutlinedTextField(
                     value = name,
                     onValueChange = { name = it },
@@ -265,6 +402,12 @@ fun AddWorkerDialog(
                         val wage = dailyWageText.toDoubleOrNull() ?: 0.0
                         val otRate = otRateText.toDoubleOrNull() ?: if (wage > 0) (wage / 8.0) else 0.0
                         val id = workerToEdit?.id ?: "KGN-W${System.currentTimeMillis().toString().takeLast(4)}"
+                        val finalLocalPath = if (photoRemoved || localPhotoPath.isBlank()) {
+                            ""
+                        } else {
+                            WorkerPhotoHelper.copyToFinalWorkerPhoto(context, localPhotoPath, id)?.absolutePath
+                                ?: localPhotoPath
+                        }
                         val formattedMobile = if (mobileDigits.isNotBlank()) WorkerMessageHelper.formatWithCountryCode(mobileDigits) else ""
                         val worker = WorkerEntity(
                             id = id,
@@ -276,7 +419,10 @@ fun AddWorkerDialog(
                             joiningDate = workerToEdit?.joiningDate ?: Formatters.formatToIndianDate(Formatters.getTodayIsoDate()),
                             siteId = selectedSiteId,
                             isActive = workerToEdit?.isActive ?: true,
-                            notes = notes
+                            notes = notes,
+                            photoUrl = if (photoRemoved) "" else photoUrl,
+                            photoStoragePath = if (photoRemoved) "" else photoStoragePath,
+                            localPhotoPath = finalLocalPath
                         )
                         onSave(worker)
                         onDismiss()
@@ -384,6 +530,8 @@ fun RecordTransactionDialog(
     language: AppLanguage,
     workers: List<WorkerEntity>,
     preSelectedWorkerId: String = "",
+    suggestedAmount: Double? = null,
+    transactionDateDisplay: String? = null,
     onDismiss: () -> Unit,
     onUpdateWorker: (WorkerEntity) -> Unit = {},
     onSubmit: (workerId: String, amount: Double, method: String, reference: String, notes: String) -> Unit
@@ -391,7 +539,15 @@ fun RecordTransactionDialog(
     var selectedWorkerId by remember {
         mutableStateOf(if (preSelectedWorkerId.isNotBlank()) preSelectedWorkerId else (workers.firstOrNull()?.id ?: ""))
     }
-    var amountText by remember { mutableStateOf("") }
+    var amountText by remember(suggestedAmount) {
+        mutableStateOf(
+            if (suggestedAmount != null && suggestedAmount > 0.0) {
+                if (suggestedAmount % 1.0 == 0.0) suggestedAmount.toLong().toString() else String.format("%.2f", suggestedAmount)
+            } else {
+                ""
+            }
+        )
+    }
     var selectedMethod by remember { mutableStateOf("Cash") }
     var reference by remember { mutableStateOf("") }
     var notes by remember { mutableStateOf("") }
@@ -404,10 +560,19 @@ fun RecordTransactionDialog(
     AlertDialog(
         onDismissRequest = onDismiss,
         title = {
-            Text(
-                text = if (isAdvance) AppStrings.get("action_record_advance", language) else AppStrings.get("action_record_payment", language),
-                fontWeight = FontWeight.Bold
-            )
+            Column {
+                Text(
+                    text = if (isAdvance) AppStrings.get("action_record_advance", language) else AppStrings.get("action_record_payment", language),
+                    fontWeight = FontWeight.Bold
+                )
+                if (!transactionDateDisplay.isNullOrBlank()) {
+                    Text(
+                        text = if (language == AppLanguage.HINDI) "हिसाब तारीख: $transactionDateDisplay" else "Hisab Date: $transactionDateDisplay",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = ConstructionOrange
+                    )
+                }
+            }
         },
         text = {
             Column(

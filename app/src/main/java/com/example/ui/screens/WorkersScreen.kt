@@ -68,6 +68,7 @@ import com.example.data.model.PaymentEntity
 import com.example.data.model.SiteEntity
 import com.example.data.model.WorkCategories
 import com.example.data.model.WorkerEntity
+import com.example.ui.components.WorkerAvatar
 import com.example.ui.theme.ConstructionOrange
 import com.example.ui.theme.StatusAbsent
 import com.example.ui.theme.StatusHalfDay
@@ -245,9 +246,13 @@ fun WorkersScreen(
         val totalPaid = workerPayments.sumOf { it.amount }
         val netBalanceDue = totalEarned - totalPaid
 
+        val siteName = sites.find { it.id == worker.siteId }?.name
+            ?: (if (language == AppLanguage.HINDI) "सामान्य (General)" else "General")
+
         WorkerProfileLedgerDialog(
             language = language,
             worker = worker,
+            siteName = siteName,
             totalDays = totalDays,
             totalOt = totalOt,
             totalEarned = totalEarned,
@@ -298,20 +303,13 @@ fun WorkerItemCard(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        modifier = Modifier
-                            .size(40.dp)
-                            .clip(CircleShape)
-                            .background(if (worker.isActive) ConstructionOrange.copy(alpha = 0.15f) else Color.LightGray),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = worker.name.take(1).uppercase(),
-                            color = if (worker.isActive) ConstructionOrange else Color.DarkGray,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 18.sp
-                        )
-                    }
+                    WorkerAvatar(
+                        workerName = worker.name,
+                        localPhotoPath = worker.localPhotoPath,
+                        photoUrl = worker.photoUrl,
+                        isActive = worker.isActive,
+                        size = 44.dp
+                    )
 
                     Spacer(modifier = Modifier.width(10.dp))
 
@@ -410,6 +408,7 @@ fun WorkerItemCard(
 fun WorkerProfileLedgerDialog(
     language: AppLanguage,
     worker: WorkerEntity,
+    siteName: String,
     totalDays: Double,
     totalOt: Double,
     totalEarned: Double,
@@ -428,7 +427,7 @@ fun WorkerProfileLedgerDialog(
         appendLine("   KGN CONSTRUCTION - WORKER LEDGER")
         appendLine("=================================")
         appendLine("Worker: ${worker.name} (${worker.id})")
-        appendLine("Skill: ${worker.category}")
+        appendLine("Skill: ${worker.category} | Site: $siteName")
         appendLine("Daily Wage: ${Formatters.formatInr(worker.dailyWage)}/day")
         appendLine("Total Days Worked: $totalDays days")
         appendLine("Total Overtime: $totalOt hrs")
@@ -450,28 +449,27 @@ fun WorkerProfileLedgerDialog(
                 modifier = Modifier.fillMaxWidth(),
                 verticalArrangement = Arrangement.spacedBy(10.dp)
             ) {
-                // Header with Worker Info
+                // Header with Worker Photo, Name, ID, Skill, Mobile & Site
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Box(
-                        modifier = Modifier
-                            .size(44.dp)
-                            .clip(CircleShape)
-                            .background(ConstructionOrange),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = worker.name.take(1).uppercase(),
-                            color = Color.White,
-                            fontWeight = FontWeight.Bold,
-                            fontSize = 20.sp
-                        )
-                    }
-                    Spacer(modifier = Modifier.width(10.dp))
+                    WorkerAvatar(
+                        workerName = worker.name,
+                        localPhotoPath = worker.localPhotoPath,
+                        photoUrl = worker.photoUrl,
+                        isActive = worker.isActive,
+                        size = 58.dp
+                    )
+                    Spacer(modifier = Modifier.width(12.dp))
                     Column {
                         Text(worker.name, fontWeight = FontWeight.Bold, fontSize = 16.sp)
                         Text(
-                            text = "${worker.category} • ${worker.mobile.ifBlank { "No Mobile" }}",
+                            text = "${worker.id} • ${worker.category}",
                             style = MaterialTheme.typography.labelMedium,
+                            color = ConstructionOrange,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                        Text(
+                            text = "${worker.mobile.ifBlank { "No Mobile" }} • $siteName",
+                            style = MaterialTheme.typography.labelSmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }

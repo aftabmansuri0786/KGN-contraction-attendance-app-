@@ -65,6 +65,7 @@ import com.example.data.model.AttendanceEntity
 import com.example.data.model.AttendanceStatus
 import com.example.data.model.SiteEntity
 import com.example.data.model.WorkerEntity
+import com.example.ui.components.WorkerAvatar
 import com.example.ui.theme.ConstructionOrange
 import com.example.ui.theme.StatusAbsent
 import com.example.ui.theme.StatusHalfDay
@@ -87,6 +88,8 @@ fun AttendanceScreen(
     sites: List<SiteEntity>,
     workers: List<WorkerEntity>,
     attendanceRecords: List<AttendanceEntity>,
+    pendingOnly: Boolean = false,
+    onPendingOnlyChanged: (Boolean) -> Unit = {},
     onDateChanged: (String) -> Unit,
     onSiteChanged: (String) -> Unit,
     onMarkAllPresent: (siteId: String, date: String) -> Unit,
@@ -96,8 +99,18 @@ fun AttendanceScreen(
     val context = LocalContext.current
     var siteMenuExpanded by remember { mutableStateOf(false) }
 
-    val filteredWorkers = workers.filter { worker ->
+    val baseFilteredWorkers = workers.filter { worker ->
         worker.isActive && (selectedSiteId.isBlank() || worker.siteId == selectedSiteId || worker.siteId.isBlank())
+    }
+    val recordedIdsForDate = attendanceRecords
+        .filter { it.date == selectedDate }
+        .map { it.workerId }
+        .toSet()
+    val pendingWorkersCount = baseFilteredWorkers.count { it.id !in recordedIdsForDate }
+    val filteredWorkers = if (pendingOnly) {
+        baseFilteredWorkers.filter { it.id !in recordedIdsForDate }
+    } else {
+        baseFilteredWorkers
     }
 
     // Date navigation helper
@@ -252,7 +265,38 @@ fun AttendanceScreen(
             }
         }
 
-        Spacer(modifier = Modifier.height(10.dp))
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // Filter Chips: All vs Pending Only
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            androidx.compose.material3.FilterChip(
+                selected = !pendingOnly,
+                onClick = { onPendingOnlyChanged(false) },
+                label = {
+                    Text(
+                        text = if (language == AppLanguage.HINDI) "सभी (${baseFilteredWorkers.size})" else "All (${baseFilteredWorkers.size})",
+                        fontSize = 12.sp
+                    )
+                }
+            )
+            androidx.compose.material3.FilterChip(
+                selected = pendingOnly,
+                onClick = { onPendingOnlyChanged(!pendingOnly) },
+                label = {
+                    Text(
+                        text = if (language == AppLanguage.HINDI) "बाकी हाज़िरी ($pendingWorkersCount)" else "Pending ($pendingWorkersCount)",
+                        fontSize = 12.sp
+                    )
+                },
+                modifier = Modifier.testTag("filter_pending_attendance_chip")
+            )
+        }
+
+        Spacer(modifier = Modifier.height(6.dp))
 
         // Worker Attendance List
         if (filteredWorkers.isEmpty()) {
@@ -266,9 +310,13 @@ fun AttendanceScreen(
                     horizontalAlignment = Alignment.CenterHorizontally
                 ) {
                     Text(
-                        text = AppStrings.get("no_workers_found", language),
+                        text = if (pendingOnly && baseFilteredWorkers.isNotEmpty()) {
+                            if (language == AppLanguage.HINDI) "आज सभी सक्रिय मज़दूरों की हाज़िरी दर्ज हो चुकी है!" else "All active workers have attendance recorded for this date."
+                        } else {
+                            AppStrings.get("no_workers_found", language)
+                        },
                         style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        color = if (pendingOnly && baseFilteredWorkers.isNotEmpty()) StatusPresent else MaterialTheme.colorScheme.onSurfaceVariant
                     )
                 }
             }
@@ -327,30 +375,42 @@ fun WorkerAttendanceCard(
             modifier = Modifier.padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            // Worker Header: Name, Skill badge, Daily wage rate
+            // Worker Header: Avatar, Name, Skill badge, Daily wage rate
             Row(
                 modifier = Modifier.fillMaxWidth(),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
-                Column {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Text(
-                            text = worker.name,
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.Bold
-                        )
-                        Spacer(modifier = Modifier.width(6.dp))
-                        Surface(
-                            color = MaterialTheme.colorScheme.surfaceVariant,
-                            shape = RoundedCornerShape(4.dp)
-                        ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.weight(1f)
+                ) {
+                    WorkerAvatar(
+                        workerName = worker.name,
+                        localPhotoPath = worker.localPhotoPath,
+                        photoUrl = worker.photoUrl,
+                        isActive = worker.isActive,
+                        size = 40.dp
+                    )
+                    Spacer(modifier = Modifier.width(10.dp))
+                    Column {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
                             Text(
-                                text = worker.category,
-                                style = MaterialTheme.typography.labelSmall,
-                                modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                text = worker.name,
+                                style = MaterialTheme.typography.titleMedium,
+                                fontWeight = FontWeight.Bold
                             )
-                        }
+                            Spacer(modifier = Modifier.width(6.dp))
+                            Surface(
+                                color = MaterialTheme.colorScheme.surfaceVariant,
+                                shape = RoundedCornerShape(4.dp)
+                            ) {
+                                Text(
+                                    text = worker.category,
+                                    style = MaterialTheme.typography.labelSmall,
+                                    modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp)
+                                )
+                            }
 
                         val hasPhone = WorkerMessageHelper.isValidPhoneNumber(worker.mobile)
                         val maskedPhone = WorkerMessageHelper.maskPhoneNumber(worker.mobile)
@@ -385,6 +445,7 @@ fun WorkerAttendanceCard(
                         style = MaterialTheme.typography.labelSmall,
                         color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
+                }
                 }
 
                 // If marked, show calculated earnings snapshot

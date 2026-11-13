@@ -15,6 +15,8 @@
         "siteId": { "type": "string" },
         "isActive": { "type": "boolean" },
         "notes": { "type": "string" },
+        "photoUrl": { "type": "string" },
+        "photoStoragePath": { "type": "string" },
         "updatedAt": { "type": "number" }
       },
       "required": ["id", "name"]
@@ -83,10 +85,97 @@
         "paymentMethod": { "type": "string" },
         "reference": { "type": "string" },
         "notes": { "type": "string" },
-        "voucherNumber": { "type": "string" },
+        "settlementPeriod": { "type": "string" },
         "createdAt": { "type": "number" }
       },
       "required": ["id", "workerId", "amount", "date"]
+    },
+    "AmavasyaConfig": {
+      "title": "AmavasyaConfig",
+      "description": "Contractor selected or calculated Amavasya settlement schedule",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "selectedSettlementDate": { "type": "string" },
+        "isManualDate": { "type": "boolean" },
+        "reminderDaysBefore": { "type": "number" },
+        "updatedAt": { "type": "number" }
+      },
+      "required": ["id"]
+    },
+    "AmavasyaSettlement": {
+      "title": "AmavasyaSettlement",
+      "description": "Worker monthly Amavasya settlement statement snapshot",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "workerId": { "type": "string" },
+        "workerName": { "type": "string" },
+        "periodStartDate": { "type": "string" },
+        "periodEndDate": { "type": "string" },
+        "presentDays": { "type": "number" },
+        "halfDays": { "type": "number" },
+        "absentDays": { "type": "number" },
+        "paidLeaveDays": { "type": "number" },
+        "payableManDays": { "type": "number" },
+        "totalWages": { "type": "number" },
+        "overtimeHours": { "type": "number" },
+        "overtimeAmount": { "type": "number" },
+        "totalEarnings": { "type": "number" },
+        "previousBalance": { "type": "number" },
+        "advancesTaken": { "type": "number" },
+        "paymentsMade": { "type": "number" },
+        "netBalance": { "type": "number" },
+        "payableAmount": { "type": "number" },
+        "outstandingAdvanceAmount": { "type": "number" },
+        "carryForwardBalance": { "type": "number" },
+        "status": { "type": "string" },
+        "isLocked": { "type": "boolean" },
+        "notes": { "type": "string" },
+        "settledAt": { "type": "number" },
+        "updatedAt": { "type": "number" }
+      },
+      "required": ["id", "workerId", "periodEndDate", "status"]
+    },
+    "SettlementAudit": {
+      "title": "SettlementAudit",
+      "description": "Audit log for Amavasya settlement completion and authorized corrections",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "settlementId": { "type": "string" },
+        "workerId": { "type": "string" },
+        "workerName": { "type": "string" },
+        "action": { "type": "string" },
+        "reason": { "type": "string" },
+        "previousNetBalance": { "type": "number" },
+        "newNetBalance": { "type": "number" },
+        "performedBy": { "type": "string" },
+        "timestamp": { "type": "number" }
+      },
+      "required": ["id", "settlementId", "workerId", "action"]
+    },
+    "MonthlyHisabPdf": {
+      "title": "MonthlyHisabPdf",
+      "description": "Metadata and Firebase Storage link for generated monthly worker and combined Hisab PDFs",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "workerId": { "type": "string" },
+        "workerName": { "type": "string" },
+        "year": { "type": "number" },
+        "month": { "type": "number" },
+        "monthLabel": { "type": "string" },
+        "periodStartDate": { "type": "string" },
+        "periodEndDate": { "type": "string" },
+        "isCombinedReport": { "type": "boolean" },
+        "storagePath": { "type": "string" },
+        "downloadUrl": { "type": "string" },
+        "fileSizeBytes": { "type": "number" },
+        "generatedAt": { "type": "number" },
+        "updatedAt": { "type": "number" }
+      },
+      "required": ["id", "workerId", "year", "month", "periodEndDate"]
     }
   },
   "firestore": {
@@ -109,6 +198,23 @@
     "/users/{userId}/payments/{paymentId}": {
       "schema": "Payment",
       "description": "Private wage payments records for owner"
+    },
+    "/users/{userId}/amavasya_settings/{settingId}": {
+      "schema": "AmavasyaConfig",
+      "description": "Private Amavasya calendar selection for owner"
+    },
+    "/users/{userId}/settlements/{settlementId}": {
+      "schema": "AmavasyaSettlement",
+      "description": "Private monthly worker settlement statements for owner"
+    },
+    "/users/{userId}/settlement_audits/{auditId}": {
+      "schema": "SettlementAudit",
+      "description": "Private audit trail for Amavasya settlements and corrections"
+    },
+    "/users/{userId}/monthly_hisab_pdfs/{pdfId}": {
+      "schema": "MonthlyHisabPdf",
+      "description": "Private monthly Amavasya Hisab PDF reports metadata for owner"
     }
   }
 }
+

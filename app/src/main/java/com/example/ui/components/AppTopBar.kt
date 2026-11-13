@@ -17,19 +17,24 @@ import androidx.compose.material.icons.filled.CloudSync
 import androidx.compose.material.icons.filled.DarkMode
 import androidx.compose.material.icons.filled.LightMode
 import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material.icons.filled.MoreVert
+import androidx.compose.material.icons.filled.NightsStay
+import androidx.compose.material.icons.filled.PictureAsPdf
 import androidx.compose.material.icons.filled.Translate
-import androidx.compose.material3.Badge
-import androidx.compose.material3.BadgedBox
 import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TopAppBar
-import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -48,12 +53,17 @@ fun AppTopBar(
     language: AppLanguage,
     isDarkTheme: Boolean,
     isSyncing: Boolean = false,
+    hasAmavasyaReminder: Boolean = false,
+    onOpenAmavasyaHisab: () -> Unit = {},
+    onOpenMonthlyPdfs: () -> Unit = {},
     onSyncClick: () -> Unit = {},
     onToggleLanguage: () -> Unit,
     onToggleTheme: () -> Unit,
     onLockApp: () -> Unit,
     modifier: Modifier = Modifier
 ) {
+    var menuExpanded by remember { mutableStateOf(false) }
+
     Surface(
         modifier = modifier.fillMaxWidth(),
         color = MaterialTheme.colorScheme.surface,
@@ -100,7 +110,7 @@ fun AppTopBar(
                 }
             }
 
-            // Action Buttons: Language Switch, Theme, Lock
+            // Action Buttons: Language Switch, Sync, Theme, Lock, Menu
             Row(verticalAlignment = Alignment.CenterVertically) {
                 // Language Switch Chip
                 Surface(
@@ -110,18 +120,18 @@ fun AppTopBar(
                     modifier = Modifier.testTag("toggle_language_btn")
                 ) {
                     Row(
-                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp),
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 5.dp),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
                         Icon(
                             imageVector = Icons.Default.Translate,
                             contentDescription = "Change Language",
-                            modifier = Modifier.size(16.dp),
+                            modifier = Modifier.size(15.dp),
                             tint = MaterialTheme.colorScheme.onPrimaryContainer
                         )
-                        Spacer(modifier = Modifier.width(4.dp))
+                        Spacer(modifier = Modifier.width(3.dp))
                         Text(
-                            text = if (language == AppLanguage.HINDI) "English" else "हिंदी",
+                            text = if (language == AppLanguage.HINDI) "EN" else "हिंदी",
                             style = MaterialTheme.typography.labelMedium,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onPrimaryContainer
@@ -129,12 +139,12 @@ fun AppTopBar(
                     }
                 }
 
-                Spacer(modifier = Modifier.width(4.dp))
+                Spacer(modifier = Modifier.width(2.dp))
 
                 // Cloud Sync Button
                 IconButton(
                     onClick = onSyncClick,
-                    modifier = Modifier.size(36.dp).testTag("sync_btn")
+                    modifier = Modifier.size(34.dp).testTag("sync_btn")
                 ) {
                     if (isSyncing) {
                         CircularProgressIndicator(
@@ -155,29 +165,125 @@ fun AppTopBar(
                 // Theme Toggle
                 IconButton(
                     onClick = onToggleTheme,
-                    modifier = Modifier.size(36.dp).testTag("toggle_theme_btn")
+                    modifier = Modifier.size(34.dp).testTag("toggle_theme_btn")
                 ) {
                     Icon(
                         imageVector = if (isDarkTheme) Icons.Default.LightMode else Icons.Default.DarkMode,
                         contentDescription = "Toggle Theme",
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(20.dp)
+                        modifier = Modifier.size(19.dp)
                     )
                 }
 
                 // Lock App
                 IconButton(
                     onClick = onLockApp,
-                    modifier = Modifier.size(36.dp).testTag("lock_app_btn")
+                    modifier = Modifier.size(34.dp).testTag("lock_app_btn")
                 ) {
                     Icon(
                         imageVector = Icons.Default.Lock,
                         contentDescription = "Lock App",
                         tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(20.dp)
+                        modifier = Modifier.size(19.dp)
                     )
+                }
+
+                // App Menu (contains Amavasya / Hisab Ka Din)
+                Box {
+                    IconButton(
+                        onClick = { menuExpanded = true },
+                        modifier = Modifier.size(34.dp).testTag("top_menu_btn")
+                    ) {
+                        Box {
+                            Icon(
+                                imageVector = Icons.Default.MoreVert,
+                                contentDescription = "More Menu",
+                                tint = MaterialTheme.colorScheme.onSurface,
+                                modifier = Modifier.size(21.dp)
+                            )
+                            if (hasAmavasyaReminder) {
+                                Box(
+                                    modifier = Modifier
+                                        .size(8.dp)
+                                        .clip(CircleShape)
+                                        .background(ConstructionOrange)
+                                        .align(Alignment.TopEnd)
+                                )
+                            }
+                        }
+                    }
+
+                    DropdownMenu(
+                        expanded = menuExpanded,
+                        onDismissRequest = { menuExpanded = false }
+                    ) {
+                        DropdownMenuItem(
+                            text = {
+                                Column {
+                                    Text(
+                                        text = AppStrings.get("amavasya_menu", language),
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Text(
+                                        text = if (language == AppLanguage.HINDI) {
+                                            "Amavasya / Hisab Ka Din • मासिक हिसाब"
+                                        } else {
+                                            "Monthly Worker Settlement"
+                                        },
+                                        fontSize = 11.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.Default.NightsStay,
+                                    contentDescription = null,
+                                    tint = ConstructionOrange
+                                )
+                            },
+                            onClick = {
+                                menuExpanded = false
+                                onOpenAmavasyaHisab()
+                            },
+                            modifier = Modifier.testTag("menu_item_amavasya_hisab")
+                        )
+
+                        DropdownMenuItem(
+                            text = {
+                                Column {
+                                    Text(
+                                        text = AppStrings.get("monthly_pdfs_menu", language),
+                                        fontWeight = FontWeight.Bold
+                                    )
+                                    Text(
+                                        text = if (language == AppLanguage.HINDI) {
+                                            "वर्ष व महीने अनुसार रिपोर्ट डाउनलोड / शेयर"
+                                        } else {
+                                            "Worker & Combined Reports Archive"
+                                        },
+                                        fontSize = 11.sp,
+                                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                                    )
+                                }
+                            },
+                            leadingIcon = {
+                                Icon(
+                                    imageVector = Icons.Default.PictureAsPdf,
+                                    contentDescription = null,
+                                    tint = ConstructionOrange
+                                )
+                            },
+                            onClick = {
+                                menuExpanded = false
+                                onOpenMonthlyPdfs()
+                            },
+                            modifier = Modifier.testTag("menu_item_monthly_pdfs")
+                        )
+                    }
                 }
             }
         }
     }
 }
+
